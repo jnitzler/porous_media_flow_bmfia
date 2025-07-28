@@ -81,7 +81,7 @@ namespace darcy
       {
         if (solution_primary_problem.in_local_range(i))
           {
-            solution_primary_problem[i] = tmp_primary_solution[i]; // temp;
+            solution_primary_problem[i] = tmp_primary_solution[i];
           }
       }
     pcout
@@ -166,10 +166,7 @@ namespace darcy
                       {
                         if (components[comp])
                           {
-                            grad_log_lik =
-                              data_vec[idx]
-                                      [comp]; // simple double for grad_log_lik
-                                              // value of interest
+                            grad_log_lik = data_vec[idx][comp];
                             break; // Assuming only one component is non-zero
                                    // per shape function
                           } // end if statement component
@@ -216,7 +213,7 @@ namespace darcy
     read_primary_solution(output_path); // this needs the dof handler hence
                                         // after setup_grid_and_dofs
     assemble_preconditioner();
-    assemble_system(); // TODO we assemble a wrong rhs for the adjoint first and
+    assemble_system(); // we assemble a wrong rhs for the adjoint first and
                        // then overwrite it...
     overwrite_adjoint_rhs();
     solve();
@@ -362,11 +359,6 @@ namespace darcy
       } // end loop cell
     pcout << "grad_log_x (distributed) successfully assembled!" << std::endl;
 
-    // sum the proc-wise grad_log_lik_x over all processors to get the final
-    // gradient
-    // for (unsigned int i; i < grad_log_lik_x_distributed.size(); i++) {
-    //   grad_log_lik_x_distributed[i] += grad_log_lik_x_partial_distributed[i];
-    // }
     Utilities::MPI::sum(grad_log_lik_x_distributed,
                         MPI_COMM_WORLD,
                         grad_log_lik_x);
@@ -385,10 +377,9 @@ main(int argc, char *argv[])
   try
     {
       using namespace darcy;
-      Utilities::MPI::MPI_InitFinalize mpi_initialization(
-        argc, argv, 1); // numbers::invalid_unsigned_int);
-      const unsigned int fe_degree = 1;
-      Darcy<2>           mixed_laplace_problem(fe_degree);
+      Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
+      const unsigned int               fe_degree = 1;
+      Darcy<2>                         mixed_laplace_problem(fe_degree);
       mixed_laplace_problem.run(input_file_path, output_file_path);
     }
   catch (std::exception &exc)
