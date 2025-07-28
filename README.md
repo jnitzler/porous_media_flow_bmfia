@@ -1,5 +1,5 @@
-# Isotropic Darcy flow
-This is a fully parallelized implementation of a darcy flow PDE with a transverse isotropic permeability field, using deal.ii. The governing equations that are solved read as follows:
+# Isotropic porous media flow
+This is a fully parallelized implementation of an isotropic porous media flow, using deal.ii. The governing equations that are solved read as follows:
 
 ```math
 \begin{align*}
