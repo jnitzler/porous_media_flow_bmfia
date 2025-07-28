@@ -1,4 +1,3 @@
-// darcy_general.h
 #ifndef DARCY_GENERAL_H
 #define DARCY_GENERAL_H
 
@@ -17,7 +16,7 @@ namespace darcy
     VectorTools::interpolate(rf_dof_handler, ref_scalar, x_vec);
   }
 
-  // generate coordinates at which observations are present
+  // generate coordinates for observation points -----------------------
   template <int dim>
   void
   Darcy<dim>::generate_coordinates()
@@ -87,29 +86,8 @@ namespace darcy
     pcout << "Random field successfully read in." << std::endl;
   }
 
-  // -------- right hand side ----------------------------
-  // Note: not used atm
-  template <int dim>
-  class RightHandSide : public Function<dim>
-  {
-  public:
-    RightHandSide()
-      : Function<dim>(1)
-    {}
 
-    double
-    value(const Point<dim> &p, const unsigned int component = 0) const override;
-  };
-
-  template <int dim>
-  double
-  RightHandSide<dim>::value(const Point<dim> & /*p*/,
-                            const unsigned int /*component*/) const
-  {
-    return 0; // zero right hand side --> incompressible flow
-  }
-
-  // -------- pressure boundary values ----------------------------
+  // -------- pressure boundary condition ----------------------------
   template <int dim>
   class PressureBoundaryValues : public Function<dim>
   {
@@ -136,7 +114,7 @@ namespace darcy
     // return p[1] * p[1] + 1; // LF pressure BC lung example
   }
 
-  // ------------- assemble preconditioner ---------
+  // ------------- assemble preconditioner ------------------------------
   template <int dim>
   void
   Darcy<dim>::assemble_preconditioner()
@@ -182,9 +160,6 @@ namespace darcy
 
             local_matrix = 0;
 
-            // right_hand_side.value_list(fe_values.get_quadrature_points(),
-            //                             rhs_values);
-
             // get rf function values and permeability tensor per cell
             std::vector<double> rf_values(n_q_points);
             Tensor<2, dim>      K_mat;
@@ -208,7 +183,6 @@ namespace darcy
                 // loop over cell dofs
                 for (unsigned int i = 0; i < dofs_per_cell; ++i)
                   {
-                    // for (unsigned int j = 0; j < dofs_per_cell; ++j)
                     for (unsigned int j = 0; j <= i; ++j)
                       {
                         // assemble local schur matrix
@@ -322,7 +296,7 @@ namespace darcy
                 for (unsigned int i = 0; i < dofs_per_cell; ++i)
                   {
                     const auto phi_mult = phi_u[i] * k_inverse;
-                    // for (unsigned int j = 0; j < dofs_per_cell; ++j)
+
                     for (unsigned int j = 0; j <= i; ++j)
                       {
                         // assemble local system matrix
@@ -331,9 +305,6 @@ namespace darcy
                            div_phi_u[i] * phi_p[j]) *
                           fe_values.JxW(q);
                       } // end inner dof loop
-                    // local_rhs(i) += (-phi_p[i] * rhs_values[q]) *
-                    // fe_values.JxW(q); //
-                    // --> zero anyways
                   } // end outer dof loop
               }
 
@@ -354,8 +325,7 @@ namespace darcy
                           fe_face_values[velocities].value(i, q);
 
                         local_rhs(i) +=
-                          -(phi_i_u * //
-                            fe_face_values.normal_vector(q) *
+                          -(phi_i_u * fe_face_values.normal_vector(q) *
                             boundary_values[q] * fe_face_values.JxW(q));
                       } // end face dof loops
                 } // end face loop
@@ -468,7 +438,7 @@ namespace darcy
 
     // generate grid and distribute dofs
     GridGenerator::hyper_cube(triangulation, 0, 1);
-    triangulation.refine_global(6); // 6 for HF, 5 for LF, 7 for the HF gt
+    triangulation.refine_global(6); // 6 for HF, 5 for LF,
     dof_handler.distribute_dofs(fe);
 
     // generate grid and distribute dofs for random field
@@ -592,9 +562,6 @@ namespace darcy
     pcout << "Block preconditioner for the system matrix created." << std::endl;
 
     // ------------------ construct the final inverse operator for the system
-    // -----------
-    // SolverControl solver_control_system(system_matrix.m(),
-    //                                    1.0e-16 * system_rhs.l2_norm());
     SolverControl solver_control_system(system_matrix.m(),
                                         1.0e-10 * system_rhs.l2_norm(),
                                         true,
@@ -607,14 +574,12 @@ namespace darcy
       solver_control_system,
       SolverGMRES<TrilinosWrappers::MPI::BlockVector>::AdditionalData(100));
 
-    // ----------- distribute the constraints to the solution vector
-    // --------------------
+    // ----------- distribute the constraints to the solution vector ---
     for (unsigned int i = 0; i < solution.size(); ++i)
       if (constraints.is_constrained(i))
         solution(i) = 0;
 
-    // ------------------ solve the system
-    // ------------------------------------------------
+    // ------------------ solve the system ---------------
     TrilinosWrappers::MPI::BlockVector distributed_solution(system_rhs);
     distributed_solution = solution;
     const unsigned int start =
