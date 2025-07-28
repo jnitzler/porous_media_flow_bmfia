@@ -1,6 +1,6 @@
 #include "darcy.h"
 
-#include <cstddef> // std::size_t
+#include <cstddef>
 
 #include "darcy_general.h"
 
@@ -34,7 +34,6 @@ namespace darcy // same namespace and in header file
 
     // loop over experimental data point locations and their values
     // resulting output format: row vector with first u_1 block then u_2 block
-    // NOTE: this has to match with what is expected in QUEENS
     for (unsigned int j = 0, k = 0; j < dim; ++j)
       {
         for (unsigned int i = 0; i < num_vel_vecs; ++i, ++k)
@@ -42,9 +41,7 @@ namespace darcy // same namespace and in header file
             l_output_data[k] = data_array[i][j];
           }
       }
-    // std::vector<double> l_output_data_summed(l_output_data.size());
 
-    // Utilities::MPI::sum(l_output_data, MPI_COMM_WORLD, l_output_data_summed);
 
     if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
@@ -54,45 +51,8 @@ namespace darcy // same namespace and in header file
       }
   }
 
-  //// --------- output field at observation points to numpy array
-  ///---------------- / --- below: pressure feature
-  // template <int dim>
-  // void Darcy<dim>::output_field_at_observation_points_npy(
-  //     const std::string &output_path) {
-  //   // collect data of interest to write out in output_data
-  //
-  //   // get the solution values at the points of interest for time step
-  //   solution_distributed = solution;
-  //
-  //   // vector for the gradients
-  //   std::vector<Tensor<1, dim>>
-  //   gradients_at_points(spatial_coordinates.size());
-  //
-  //   // loop over the points of interest
-  //   for (unsigned int i = 0; i < spatial_coordinates.size(); ++i) {
-  //     // get the gradient at the point of interest
-  //     gradients_at_points[i] = VectorTools::point_gradient<dim>(
-  //         dof_handler, solution_distributed, spatial_coordinates[i]);
-  //   }
-  //
-  //   // append them to the data vector
-  //   std::vector<double> pressure_grad_x;
-  //
-  //   // loop over experimental data point locations and their values
-  //   // NOTE: this has to match with what is expected in QUEENS
-  //     for (const auto &entry : gradients_at_points) {
-  //       pressure_grad_x.push_back(entry[4]);
-  //     }
-  //
-  //   if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) {
-  //     const std::string filename = output_path + "_features.npy";
-  //     const unsigned int num_data = pressure_grad_x.size();
-  //     write_data_to_npy(filename, pressure_grad_x, num_data, 1);
-  //   }
-  // }
 
   // --------- output field at observation points to numpy array
-  // ----------------
   // --- below: x-feature
   template <int dim>
   void
@@ -116,7 +76,6 @@ namespace darcy // same namespace and in header file
     unsigned int num_x_vec = data_array.size();
 
     // loop over experimental data point locations and their values
-    // NOTE: this has to match with what is expected in QUEENS
     std::vector<double> feature_vec(num_x_vec);
     for (unsigned int i = 0; i < num_x_vec; i++)
       {
