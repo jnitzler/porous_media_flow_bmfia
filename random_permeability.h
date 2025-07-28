@@ -1,12 +1,7 @@
-// random_permeability.h
 #ifndef RANDOM_PERMEABILITY_H
 #define RANDOM_PERMEABILITY_H
 
 #include "darcy.h"
-
-// include the random field implementation
-// #include "../random_fields/rbf_fourier_expansion.h"
-// #include "../random_fields/rbf_kle.h"
 
 namespace darcy
 {
