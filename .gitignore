@@ -1,0 +1,7 @@
+# ignore build directory
+build/
+
+# ignore input and output directories
+output/
+input/
+
