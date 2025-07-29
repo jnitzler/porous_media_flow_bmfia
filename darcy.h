@@ -84,7 +84,7 @@ namespace darcy
     void
     setup_grid_and_dofs();
     void
-    assemble_preconditioner();
+    assemble_approx_schur_complement();
     void
     assemble_system();
     void

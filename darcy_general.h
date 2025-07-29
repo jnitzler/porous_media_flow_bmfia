@@ -115,14 +115,14 @@ namespace darcy
     // return p[1] * p[1] + 1; // LF pressure BC lung example
   }
 
-  // ------------- assemble preconditioner ------------------------------
+  // ------------- assemble approx Schur complement --------------
   template <int dim>
   void
-  Darcy<dim>::assemble_preconditioner()
+  Darcy<dim>::assemble_approx_schur_complement()
   {
     TimerOutput::Scope timer_section(computing_timer,
-                                     "   Assemble preconditioner");
-    pcout << "Assemble preconditioner..." << std::endl;
+                                     "   Assemble approx. Schur compl.");
+    pcout << "Assemble approx. Schur complement..." << std::endl;
     precondition_matrix = 0;
     const QGauss<dim> quadrature_formula(degree_u + 1);
 

@@ -212,7 +212,7 @@ namespace darcy
     // generate_ref_input();
     read_primary_solution(output_path); // this needs the dof handler hence
                                         // after setup_grid_and_dofs
-    assemble_preconditioner();
+    assemble_approx_schur_complement();
     assemble_system(); // we assemble a wrong rhs for the adjoint first and
                        // then overwrite it...
     overwrite_adjoint_rhs();
