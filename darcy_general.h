@@ -124,7 +124,7 @@ namespace darcy
                                      "   Assemble approx. Schur compl.");
     pcout << "Assemble approx. Schur complement..." << std::endl;
     precondition_matrix = 0;
-    const QGauss<dim> quadrature_formula(degree_u + 1);
+    const QGauss<dim> quadrature_formula(degree_p + 1);
 
     // start the cell loop
     FEValues<dim>      fe_values(fe,
