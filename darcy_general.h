@@ -23,7 +23,7 @@ namespace darcy
   {
     // ------ generate coordinates ----------------//
     const unsigned int n_points = 50;
-    const double       h        = 0.9995 / (n_points - 1);
+    const double       h        = 1.0 / (n_points - 1);
     Point<dim>         p;
     spatial_coordinates.resize(Utilities::fixed_power<dim>(n_points));
 
@@ -32,7 +32,7 @@ namespace darcy
         unsigned int tempIdx = idx;
         for (int d = 0; d < dim; ++d)
           {
-            p[d] = (tempIdx % n_points) * h + 1.0e-05;
+            p[d] = (tempIdx % n_points) * h;
             tempIdx /= n_points;
           }
         spatial_coordinates[idx] = p;
@@ -438,7 +438,7 @@ namespace darcy
 
     // generate grid and distribute dofs
     GridGenerator::hyper_cube(triangulation, 0, 1);
-    triangulation.refine_global(6); // 6 for HF, 5 for LF,
+    triangulation.refine_global(5); // 6 for HF, 5 for LF
     dof_handler.distribute_dofs(fe);
 
     // generate grid and distribute dofs for random field

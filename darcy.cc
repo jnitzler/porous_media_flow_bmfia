@@ -230,14 +230,14 @@ namespace darcy // same namespace and in header file
   {
     setup_grid_and_dofs();
     read_input_npy(input_path);
-    // generate_ref_input();
+    // generate_ref_input(); // optional for testing: not gt
     generate_coordinates();
     assemble_preconditioner();
     assemble_system();
     solve();
 
     // output the results
-    // output_pvtu(output_path);
+    output_pvtu(output_path);
     output_full_velocity_npy(output_path);
     output_velocity_at_observation_points_npy(output_path);
     output_field_at_observation_points_npy(output_path);
