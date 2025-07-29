@@ -65,7 +65,7 @@ namespace darcy
   class Darcy
   {
   public:
-    explicit Darcy(const unsigned int degree);
+    explicit Darcy(const unsigned int degree_p);
     void
     run(const std::string &input_path, const std::string &output_path);
 
@@ -110,7 +110,8 @@ namespace darcy
     void
     final_inner_adjoint_product();
 
-    const unsigned int degree;
+    const unsigned int degree_p; // degree of pressure space
+    const unsigned int degree_u; // degree of velocity space
 
     // Triangulation<dim> triangulation;
     parallel::distributed::Triangulation<dim> triangulation;

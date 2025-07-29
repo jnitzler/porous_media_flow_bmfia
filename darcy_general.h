@@ -41,13 +41,14 @@ namespace darcy
 
   // ------ class constructor ----------------
   template <int dim>
-  Darcy<dim>::Darcy(const unsigned int degree)
-    : degree(degree)
+  Darcy<dim>::Darcy(const unsigned int degree_p)
+    : degree_p(degree_p)
+    , degree_u(degree_p + 1)
     , triangulation(MPI_COMM_WORLD,
                     typename Triangulation<dim>::MeshSmoothing(
                       Triangulation<dim>::smoothing_on_refinement |
                       Triangulation<dim>::smoothing_on_coarsening))
-    , fe(FE_Q<dim>(degree + 1), dim, FE_Q<dim>(degree), 1)
+    , fe(FE_Q<dim>(degree_u), dim, FE_Q<dim>(degree_p), 1)
     , dof_handler(triangulation)
     , rf_fe_system(FE_Q<dim>(1), 1)
     , rf_dof_handler(triangulation)
@@ -123,7 +124,7 @@ namespace darcy
                                      "   Assemble preconditioner");
     pcout << "Assemble preconditioner..." << std::endl;
     precondition_matrix = 0;
-    const QGauss<dim> quadrature_formula(degree + 2);
+    const QGauss<dim> quadrature_formula(degree_u + 1);
 
     // start the cell loop
     FEValues<dim>      fe_values(fe,
@@ -222,8 +223,8 @@ namespace darcy
     system_matrix = 0;
     system_rhs    = 0;
 
-    const QGauss<dim>     quadrature_formula(degree + 2);
-    const QGauss<dim - 1> face_quadrature_formula(degree + 2);
+    const QGauss<dim>     quadrature_formula(degree_u + 1);
+    const QGauss<dim - 1> face_quadrature_formula(degree_u + 1);
     FEValues<dim>         fe_values(fe,
                             quadrature_formula,
                             update_values | update_quadrature_points |

@@ -249,8 +249,8 @@ namespace darcy
 
     // quadrature formula, fe values and dofs
     // standard gauss quadrature
-    const QGauss<dim>  quadrature(degree +
-                                 2); // we choose a coarser quadrature here
+    const QGauss<dim>  quadrature(degree_u +
+                                 1); // we choose a coarser quadrature here
     FEValues<dim>      fe_values(fe,
                             quadrature,
                             update_quadrature_points | update_values |
