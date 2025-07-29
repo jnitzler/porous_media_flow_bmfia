@@ -168,7 +168,7 @@ namespace darcy
       const std::vector<IndexSet> &system_relevant_partitioning);
 
     void
-    setup_preconditioner(
+    setup_approx_schur_complement(
       const std::vector<IndexSet> &system_partitioning,
       const std::vector<IndexSet> &system_relevant_partitioning);
   };

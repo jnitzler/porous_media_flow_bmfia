@@ -278,7 +278,7 @@ namespace darcy
             Tensor<2, dim>      K_mat;
             fe_rf_values.get_function_values(x_vec_distributed, rf_values);
 
-            // loop over quadrature points
+            // ---- INTERIOR loop over quadrature points ------------ //
             for (unsigned int q = 0; q < n_q_points; ++q)
               {
                 // get the permeability tensor at quadrature point
@@ -372,10 +372,20 @@ namespace darcy
     Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
     for (unsigned int c = 0; c < dim + 1; ++c)
       for (unsigned int d = 0; d < dim + 1; ++d)
-        if (!((c == dim) && (d == dim)))
-          coupling[c][d] = DoFTools::always;
-        else
+        if (((c == dim) && (d == dim)))
           coupling[c][d] = DoFTools::none;
+        else
+          {
+            if (c < dim && d < dim)
+              {
+                if (c == d)
+                  coupling[c][d] = DoFTools::always;
+                else
+                  coupling[c][d] = DoFTools::none;
+              }
+            else
+              coupling[c][d] = DoFTools::always;
+          }
 
     DoFTools::make_sparsity_pattern(dof_handler,
                                     coupling,
@@ -393,10 +403,10 @@ namespace darcy
            // this should be moved to a separate function in the future
   }
 
-  // ---------- setup preconditioner ------------------------
+  // ---------- setup approx schur complement ------------------------
   template <int dim>
   void
-  Darcy<dim>::setup_preconditioner(
+  Darcy<dim>::setup_approx_schur_complement(
     const std::vector<IndexSet> &partitioning,
     const std::vector<IndexSet> &relevant_partitioning)
   {
@@ -512,7 +522,7 @@ namespace darcy
     }
 
     setup_system_matrix(partitioning, relevant_partitioning);
-    setup_preconditioner(partitioning, relevant_partitioning);
+    setup_approx_schur_complement(partitioning, relevant_partitioning);
 
     solution.reinit(partitioning, MPI_COMM_WORLD);
     solution_primary_problem.reinit(partitioning, MPI_COMM_WORLD);
