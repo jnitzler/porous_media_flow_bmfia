@@ -4,6 +4,7 @@
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/index_set.h>
 #include <deal.II/base/mpi.h>
+#include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/timer.h>
 #include <deal.II/distributed/tria.h>
@@ -31,16 +32,16 @@ namespace darcy
   class Darcy
   {
   public:
-    explicit Darcy(const unsigned int degree_p);
+    explicit Darcy(dealii::ParameterHandler &prm);
+
     void
-    run(const std::string &input_path, const std::string &output_path);
+    run();
 
   private:
     void
     generate_coordinates();
     void
-    run_simulation(const std::string &input_path,
-                   const std::string &output_path);
+    run_simulation();
     void
     read_input_npy(const std::string &input_path);
     void
@@ -76,12 +77,17 @@ namespace darcy
     void
     final_inner_adjoint_product();
 
-    const unsigned int degree_p; // degree of pressure space
-    const unsigned int degree_u; // degree of velocity space
+    unsigned int degree_p; // degree of pressure space
+    unsigned int degree_u; // degree of velocity space
+    unsigned int n_refinements;
+    std::string  npy_input_file_name;
+    std::string  output_file_name;
+
+    dealii::ParameterHandler &prm;
 
     // Triangulation<dim> triangulation;
     dealii::parallel::distributed::Triangulation<dim> triangulation;
-    dealii::FESystem<dim>                             fe;
+    std::unique_ptr<dealii::FESystem<dim>>            fe;
     dealii::DoFHandler<dim>                           dof_handler;
 
     // random field setup

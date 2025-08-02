@@ -14,11 +14,11 @@
 #include "darcy.h"
 #include "darcy_general.h"
 #include "npy.hpp"
+#include "parameter_reader.h"
 #include "random_permeability.h"
 
 namespace darcy
 {
-
   // ---------------------- read upstream gradient npy -------------------------
   template <int dim>
   void
@@ -111,7 +111,7 @@ namespace darcy
     //! unused?
     dealii::FEValuesExtractors::Vector velocities(0);
 
-    const unsigned int dofs_per_cell    = fe.n_dofs_per_cell();
+    const unsigned int dofs_per_cell    = fe->n_dofs_per_cell();
     const unsigned int dofs_per_cell_rf = rf_fe_system.n_dofs_per_cell();
 
     dealii::MappingQ<dim>                        dummy_mapping(1);
@@ -124,7 +124,6 @@ namespace darcy
     for (const auto &cell_tria : triangulation.active_cell_iterators())
       {
         const auto &cell = cell_tria->as_dof_handler_iterator(dof_handler);
-
         // only consider locally owned cells
         if (cell->is_locally_owned())
           {
@@ -165,11 +164,11 @@ namespace darcy
                   {
                     // get shape function value at current point for current
                     // dof-shape fun
-                    double shape_value = fe.shape_value(i, current_cell_point);
+                    double shape_value = fe->shape_value(i, current_cell_point);
 
                     // small hack to filter the correct component --> for
                     // specific dof all but one component should be 0
-                    auto   components   = fe.get_nonzero_components(i);
+                    auto   components   = fe->get_nonzero_components(i);
                     double grad_log_lik = 0.0;
 
                     // loop over components/dim of output filed
@@ -200,11 +199,11 @@ namespace darcy
   // ---------------------- run method adjoint --------------------------------
   template <int dim>
   void
-  Darcy<dim>::run(const std::string &input_path, const std::string &output_path)
+  Darcy<dim>::run()
   {
     generate_coordinates();
-    read_upstream_gradient_npy(input_path);
-    run_simulation(input_path, output_path);
+    read_upstream_gradient_npy(npy_input_file_name);
+    run_simulation();
 
     pcout << "Adjoint problem solved successfully!" << std::endl;
     computing_timer.print_summary();
@@ -216,14 +215,13 @@ namespace darcy
   // ---------------------- run simulation adjoint ----------------------------
   template <int dim>
   void
-  Darcy<dim>::run_simulation(const std::string &input_path,
-                             const std::string &output_path)
+  Darcy<dim>::run_simulation()
   {
     setup_grid_and_dofs();
-    read_input_npy(input_path);
+    read_input_npy(npy_input_file_name);
     // generate_ref_input();
-    read_primary_solution(output_path); // this needs the dof handler hence
-                                        // after setup_grid_and_dofs
+    read_primary_solution(output_file_name); // this needs the dof handler hence
+                                             // after setup_grid_and_dofs
     assemble_approx_schur_complement();
     assemble_system(); // we assemble a wrong rhs for the adjoint first and
                        // then overwrite it...
@@ -237,7 +235,7 @@ namespace darcy
 
     if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
-        const std::string filename = output_path + "_grad_solution.npy";
+        const std::string filename = output_file_name + "_grad_solution.npy";
         write_data_to_npy(filename, grad_log_lik_x, rows, columns);
       }
   }
@@ -263,7 +261,7 @@ namespace darcy
     // standard gauss quadrature
     const dealii::QGauss<dim> quadrature(
       degree_u + 1); // we choose a coarser quadrature here
-    dealii::FEValues<dim> fe_values(fe,
+    dealii::FEValues<dim> fe_values(*fe,
                                     quadrature,
                                     dealii::update_quadrature_points |
                                       dealii::update_values |
@@ -275,7 +273,7 @@ namespace darcy
     const unsigned int    n_q_points = quadrature.size();
     // other stuff
     dealii::FEValuesExtractors::Vector velocities(0);
-    const unsigned int                 dofs_per_cell = fe.n_dofs_per_cell();
+    const unsigned int                 dofs_per_cell = fe->n_dofs_per_cell();
     const unsigned int rf_dofs_per_cell = rf_fe_system.n_dofs_per_cell();
 
     // local to global mapping for random field
@@ -386,8 +384,10 @@ namespace darcy
 int
 main(int argc, char *argv[])
 {
-  std::string input_file_path  = argv[1];
-  std::string output_file_path = argv[2];
+  const std::string        prm_file_path{argv[1]};
+  dealii::ParameterHandler prm;
+  ParameterReader          prm_reader(prm);
+  prm_reader.read_parameters(prm_file_path);
 
   try
     {
@@ -395,9 +395,8 @@ main(int argc, char *argv[])
       dealii::Utilities::MPI::MPI_InitFinalize mpi_initialization(argc,
                                                                   argv,
                                                                   1);
-      const unsigned int                       fe_degree = 1;
-      Darcy<2>                                 mixed_laplace_problem(fe_degree);
-      mixed_laplace_problem.run(input_file_path, output_file_path);
+      Darcy<2>                                 mixed_laplace_problem(prm);
+      mixed_laplace_problem.run();
     }
   catch (std::exception &exc)
     {

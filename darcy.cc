@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/mpi_remote_point_evaluation.h>
+#include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/types.h>
 #include <deal.II/fe/mapping_q.h>
 #include <deal.II/numerics/data_component_interpretation.h>
@@ -12,6 +13,7 @@
 #include <vector>
 
 #include "darcy_general.h"
+#include "parameter_reader.h"
 
 namespace darcy // same namespace and in header file
 {
@@ -227,9 +229,9 @@ namespace darcy // same namespace and in header file
   // ----------------- run methods -----------------
   template <int dim>
   void
-  Darcy<dim>::run(const std::string &input_path, const std::string &output_path)
+  Darcy<dim>::run()
   {
-    run_simulation(input_path, output_path);
+    run_simulation();
 
     computing_timer.print_summary();
     computing_timer.reset();
@@ -238,11 +240,10 @@ namespace darcy // same namespace and in header file
 
   template <int dim>
   void
-  Darcy<dim>::run_simulation(const std::string &input_path,
-                             const std::string &output_path)
+  Darcy<dim>::run_simulation()
   {
     setup_grid_and_dofs();
-    read_input_npy(input_path);
+    read_input_npy(npy_input_file_name);
     // generate_ref_input(); // optional for testing: not gt
     generate_coordinates();
     assemble_approx_schur_complement();
@@ -250,10 +251,10 @@ namespace darcy // same namespace and in header file
     solve();
 
     // output the results
-    output_pvtu(output_path);
-    output_full_velocity_npy(output_path);
-    output_velocity_at_observation_points_npy(output_path);
-    output_field_at_observation_points_npy(output_path);
+    output_pvtu(output_file_name);
+    output_full_velocity_npy(output_file_name);
+    output_velocity_at_observation_points_npy(output_file_name);
+    output_field_at_observation_points_npy(output_file_name);
 
   } // end run simulation
 
@@ -263,16 +264,17 @@ namespace darcy // same namespace and in header file
 int
 main(int argc, char *argv[])
 {
-  std::string input_file_path  = argv[1];
-  std::string output_file_path = argv[2];
+  const std::string        prm_file_path{argv[1]};
+  dealii::ParameterHandler prm;
+  ParameterReader          prm_reader(prm);
+  prm_reader.read_parameters(prm_file_path);
 
   try
     {
       dealii::Utilities::MPI::MPI_InitFinalize mpi_initialization(
         argc, argv, dealii::numbers::invalid_unsigned_int);
-      const unsigned int fe_degree = 1;
-      darcy::Darcy<2>    mixed_laplace_problem(fe_degree);
-      mixed_laplace_problem.run(input_file_path, output_file_path);
+      darcy::Darcy<2> mixed_laplace_problem(prm);
+      mixed_laplace_problem.run();
     }
   catch (std::exception &exc)
     {
