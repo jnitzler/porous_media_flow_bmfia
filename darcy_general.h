@@ -1,7 +1,39 @@
 #ifndef DARCY_GENERAL_H
 #define DARCY_GENERAL_H
 
+#include <deal.II/base/function.h>
+#include <deal.II/base/index_set.h>
+#include <deal.II/base/mpi.h>
+#include <deal.II/base/point.h>
+#include <deal.II/base/quadrature_lib.h>
+#include <deal.II/base/table.h>
+#include <deal.II/base/tensor.h>
+#include <deal.II/base/timer.h>
+#include <deal.II/base/types.h>
+#include <deal.II/base/utilities.h>
+#include <deal.II/dofs/dof_handler.h>
+#include <deal.II/dofs/dof_renumbering.h>
+#include <deal.II/dofs/dof_tools.h>
+#include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/fe_values_extractors.h>
+#include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/tria.h>
+#include <deal.II/lac/block_sparsity_pattern.h>
+#include <deal.II/lac/full_matrix.h>
+#include <deal.II/lac/precondition.h>
+#include <deal.II/lac/solver_control.h>
+#include <deal.II/lac/solver_gmres.h>
+#include <deal.II/lac/trilinos_block_sparse_matrix.h>
+#include <deal.II/lac/trilinos_parallel_block_vector.h>
+#include <deal.II/lac/trilinos_precondition.h>
+#include <deal.II/lac/trilinos_sparse_matrix.h>
+#include <deal.II/lac/trilinos_sparsity_pattern.h>
+#include <deal.II/lac/vector_operation.h>
+#include <deal.II/numerics/vector_tools.h>
+
 #include "darcy.h"
+#include "npy.hpp"
 #include "preconditioner.h"
 #include "random_permeability.h"
 
@@ -13,7 +45,7 @@ namespace darcy
   Darcy<dim>::generate_ref_input()
   {
     const RandomMedium::RefScalar<dim> ref_scalar;
-    VectorTools::interpolate(rf_dof_handler, ref_scalar, x_vec);
+    dealii::VectorTools::interpolate(rf_dof_handler, ref_scalar, x_vec);
   }
 
   // generate coordinates for observation points -----------------------
@@ -24,8 +56,8 @@ namespace darcy
     // ------ generate coordinates ----------------//
     const unsigned int n_points = 50;
     const double       h        = 1.0 / (n_points - 1);
-    Point<dim>         p;
-    spatial_coordinates.resize(Utilities::fixed_power<dim>(n_points));
+    dealii::Point<dim> p;
+    spatial_coordinates.resize(dealii::Utilities::fixed_power<dim>(n_points));
 
     for (unsigned int idx = 0; idx < spatial_coordinates.size(); ++idx)
       {
@@ -45,18 +77,19 @@ namespace darcy
     : degree_p(degree_p)
     , degree_u(degree_p + 1)
     , triangulation(MPI_COMM_WORLD,
-                    typename Triangulation<dim>::MeshSmoothing(
-                      Triangulation<dim>::smoothing_on_refinement |
-                      Triangulation<dim>::smoothing_on_coarsening))
-    , fe(FE_Q<dim>(degree_u), dim, FE_Q<dim>(degree_p), 1)
+                    typename dealii::Triangulation<dim>::MeshSmoothing(
+                      dealii::Triangulation<dim>::smoothing_on_refinement |
+                      dealii::Triangulation<dim>::smoothing_on_coarsening))
+    , fe(dealii::FE_Q<dim>(degree_u), dim, dealii::FE_Q<dim>(degree_p), 1)
     , dof_handler(triangulation)
-    , rf_fe_system(FE_Q<dim>(1), 1)
+    , rf_fe_system(dealii::FE_Q<dim>(1), 1)
     , rf_dof_handler(triangulation)
-    , pcout(std::cout, (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0))
+    , pcout(std::cout,
+            (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0))
     , computing_timer(MPI_COMM_WORLD,
                       pcout,
-                      TimerOutput::never,
-                      TimerOutput::wall_times)
+                      dealii::TimerOutput::never,
+                      dealii::TimerOutput::wall_times)
   {}
 
   // ------ read input file ------------------------------
@@ -64,7 +97,7 @@ namespace darcy
   void
   Darcy<dim>::read_input_npy(const std::string &filename)
   {
-    TimerOutput::Scope timer_section(computing_timer, "   Read Inputs");
+    dealii::TimerOutput::Scope timer_section(computing_timer, "   Read Inputs");
 
     std::vector<unsigned long> shape{};
     bool                       fortran_order{};
@@ -90,20 +123,21 @@ namespace darcy
 
   // -------- pressure boundary condition ----------------------------
   template <int dim>
-  class PressureBoundaryValues : public Function<dim>
+  class PressureBoundaryValues : public dealii::Function<dim>
   {
   public:
     PressureBoundaryValues()
-      : Function<dim>(1)
+      : dealii::Function<dim>(1)
     {}
 
     double
-    value(const Point<dim> &p, const unsigned int component = 0) const override;
+    value(const dealii::Point<dim> &p,
+          const unsigned int        component = 0) const override;
   };
 
   template <int dim>
   double
-  PressureBoundaryValues<dim>::value(const Point<dim> &p,
+  PressureBoundaryValues<dim>::value(const dealii::Point<dim> &p,
                                      const unsigned int /*component*/) const
   {
     return 1 - p[0] * p[0] + (p[1] - 0.5) * (p[1] - 0.5); // HF model
@@ -120,25 +154,29 @@ namespace darcy
   void
   Darcy<dim>::assemble_approx_schur_complement()
   {
-    TimerOutput::Scope timer_section(computing_timer,
-                                     "   Assemble approx. Schur compl.");
+    dealii::TimerOutput::Scope timer_section(
+      computing_timer, "   Assemble approx. Schur compl.");
     pcout << "Assemble approx. Schur complement..." << std::endl;
     precondition_matrix = 0;
-    const QGauss<dim> quadrature_formula(degree_p + 1);
+    const dealii::QGauss<dim> quadrature_formula(degree_p + 1);
 
     // start the cell loop
-    FEValues<dim>      fe_values(fe,
-                            quadrature_formula,
-                            update_JxW_values | update_values |
-                              update_quadrature_points | update_gradients);
-    FEValues<dim>      fe_rf_values(rf_fe_system,
-                               quadrature_formula,
-                               update_values | update_quadrature_points);
-    const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
-    const unsigned int n_q_points    = fe_values.n_quadrature_points;
-    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
-    FullMatrix<double> local_matrix(dofs_per_cell, dofs_per_cell);
-    double             JxW_q;
+    dealii::FEValues<dim> fe_values(fe,
+                                    quadrature_formula,
+                                    dealii::update_JxW_values |
+                                      dealii::update_values |
+                                      dealii::update_quadrature_points |
+                                      dealii::update_gradients);
+    dealii::FEValues<dim> fe_rf_values(rf_fe_system,
+                                       quadrature_formula,
+                                       dealii::update_values |
+                                         dealii::update_quadrature_points);
+    const unsigned int    dofs_per_cell = fe.n_dofs_per_cell();
+    const unsigned int    n_q_points    = fe_values.n_quadrature_points;
+    std::vector<dealii::types::global_dof_index> local_dof_indices(
+      dofs_per_cell);
+    dealii::FullMatrix<double> local_matrix(dofs_per_cell, dofs_per_cell);
+    double                     JxW_q;
     x_vec_distributed = x_vec;
 
     for (const auto &cell_tria : triangulation.active_cell_iterators())
@@ -156,14 +194,15 @@ namespace darcy
 
             cell->get_dof_indices(local_dof_indices);
 
-            const FEValuesExtractors::Vector velocities(0);
-            const FEValuesExtractors::Scalar pressure(dim);
+            // TODO! check if unused is correct
+            const dealii::FEValuesExtractors::Vector velocities(0);
+            const dealii::FEValuesExtractors::Scalar pressure(dim);
 
             local_matrix = 0;
 
             // get rf function values and permeability tensor per cell
-            std::vector<double> rf_values(n_q_points);
-            Tensor<2, dim>      K_mat;
+            std::vector<double>    rf_values(n_q_points);
+            dealii::Tensor<2, dim> K_mat;
             fe_rf_values.get_function_values(x_vec_distributed, rf_values);
 
             // quadrature loop
@@ -175,7 +214,7 @@ namespace darcy
                 // evaluate fe values on all dofs first
 
                 JxW_q = fe_values.JxW(q);
-                std::vector<Tensor<1, dim>> grad_phi_p(dofs_per_cell);
+                std::vector<dealii::Tensor<1, dim>> grad_phi_p(dofs_per_cell);
                 for (unsigned int k = 0; k < dofs_per_cell; ++k)
                   {
                     grad_phi_p[k] = fe_values[pressure].gradient(k, q);
@@ -208,7 +247,7 @@ namespace darcy
 
       } // end cell loop
 
-    precondition_matrix.compress(VectorOperation::add);
+    precondition_matrix.compress(dealii::VectorOperation::add);
     pcout << "Preconditioner successfully assembled" << std::endl;
   }
 
@@ -217,36 +256,42 @@ namespace darcy
   void
   Darcy<dim>::assemble_system()
   {
-    TimerOutput::Scope timer_section(computing_timer, "  Assemble system");
+    dealii::TimerOutput::Scope timer_section(computing_timer,
+                                             "  Assemble system");
     pcout << "Assemble system..." << std::endl;
 
     system_matrix = 0;
     system_rhs    = 0;
 
-    const QGauss<dim>     quadrature_formula(degree_u + 1);
-    const QGauss<dim - 1> face_quadrature_formula(degree_u + 1);
-    FEValues<dim>         fe_values(fe,
-                            quadrature_formula,
-                            update_values | update_quadrature_points |
-                              update_JxW_values | update_gradients);
-    FEValues<dim>         fe_rf_values(rf_fe_system,
-                               quadrature_formula,
-                               update_values | update_quadrature_points);
-    FEFaceValues<dim>     fe_face_values(fe,
-                                     face_quadrature_formula,
-                                     update_values | update_normal_vectors |
-                                       update_quadrature_points |
-                                       update_JxW_values);
-    const unsigned int    dofs_per_cell   = fe.n_dofs_per_cell();
-    const unsigned int    n_q_points      = fe_values.n_quadrature_points;
-    const unsigned int    n_face_q_points = fe_face_values.n_quadrature_points;
-    std::vector<Tensor<1, dim>>          phi_u(dofs_per_cell);
-    std::vector<double>                  div_phi_u(dofs_per_cell);
-    std::vector<double>                  phi_p(dofs_per_cell);
-    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
-    FullMatrix<double> local_matrix(dofs_per_cell, dofs_per_cell);
-    Vector<double>     local_rhs(dofs_per_cell);
-    double             JxW_q;
+    const dealii::QGauss<dim>     quadrature_formula(degree_u + 1);
+    const dealii::QGauss<dim - 1> face_quadrature_formula(degree_u + 1);
+    dealii::FEValues<dim>         fe_values(fe,
+                                    quadrature_formula,
+                                    dealii::update_values |
+                                      dealii::update_quadrature_points |
+                                      dealii::update_JxW_values |
+                                      dealii::update_gradients);
+    dealii::FEValues<dim>         fe_rf_values(rf_fe_system,
+                                       quadrature_formula,
+                                       dealii::update_values |
+                                         dealii::update_quadrature_points);
+    dealii::FEFaceValues<dim>     fe_face_values(
+      fe,
+      face_quadrature_formula,
+      dealii::update_values | dealii::update_normal_vectors |
+        dealii::update_quadrature_points | dealii::update_JxW_values);
+    const unsigned int dofs_per_cell   = fe.n_dofs_per_cell();
+    const unsigned int n_q_points      = fe_values.n_quadrature_points;
+    const unsigned int n_face_q_points = fe_face_values.n_quadrature_points;
+    std::vector<dealii::Tensor<1, dim>>          phi_u(dofs_per_cell);
+    std::vector<double>                          div_phi_u(dofs_per_cell);
+    std::vector<double>                          phi_p(dofs_per_cell);
+    std::vector<dealii::types::global_dof_index> local_dof_indices(
+      dofs_per_cell);
+    dealii::FullMatrix<double> local_matrix(dofs_per_cell, dofs_per_cell);
+    dealii::Vector<double>     local_rhs(dofs_per_cell);
+    // TODO! check if unused is correct
+    double JxW_q;
 
     // start the cell loop
     for (const auto &cell_tria : triangulation.active_cell_iterators())
@@ -262,8 +307,8 @@ namespace darcy
             fe_rf_values.reinit(rf_cell);
             cell->get_dof_indices(local_dof_indices);
 
-            const FEValuesExtractors::Vector velocities(0);
-            const FEValuesExtractors::Scalar pressure(dim);
+            const dealii::FEValuesExtractors::Vector velocities(0);
+            const dealii::FEValuesExtractors::Scalar pressure(dim);
 
             local_matrix = 0;
             local_rhs    = 0;
@@ -274,8 +319,8 @@ namespace darcy
             // get rf function values and permeability tensor per cell
             // note we assume the same quadrature points for random field and
             // solution values
-            std::vector<double> rf_values(n_q_points);
-            Tensor<2, dim>      K_mat;
+            std::vector<double>    rf_values(n_q_points);
+            dealii::Tensor<2, dim> K_mat;
             fe_rf_values.get_function_values(x_vec_distributed, rf_values);
 
             // ---- INTERIOR loop over quadrature points ------------ //
@@ -283,7 +328,7 @@ namespace darcy
               {
                 // get the permeability tensor at quadrature point
                 RandomMedium::get_k_mat(rf_values[q], K_mat);
-                const Tensor<2, dim> k_inverse = invert(K_mat);
+                const dealii::Tensor<2, dim> k_inverse = invert(K_mat);
 
                 // evaluate fe values on all dofs first
                 for (unsigned int k = 0; k < dofs_per_cell; ++k)
@@ -322,7 +367,7 @@ namespace darcy
                   for (unsigned int q = 0; q < n_face_q_points; ++q)
                     for (unsigned int i = 0; i < dofs_per_cell; ++i)
                       {
-                        const Tensor<1, dim> phi_i_u =
+                        const dealii::Tensor<1, dim> phi_i_u =
                           fe_face_values[velocities].value(i, q);
 
                         local_rhs(i) +=
@@ -348,8 +393,8 @@ namespace darcy
           } // end if locally owned
       } // end cell loop
 
-    system_matrix.compress(VectorOperation::add);
-    system_rhs.compress(VectorOperation::add);
+    system_matrix.compress(dealii::VectorOperation::add);
+    system_rhs.compress(dealii::VectorOperation::add);
 
     pcout << "System successfully assembled" << std::endl;
   }
@@ -358,42 +403,42 @@ namespace darcy
   template <int dim>
   void
   Darcy<dim>::setup_system_matrix(
-    const std::vector<IndexSet> &partitioning,
-    const std::vector<IndexSet> &relevant_partitioning)
+    const std::vector<dealii::IndexSet> &partitioning,
+    const std::vector<dealii::IndexSet> &relevant_partitioning)
   {
     system_matrix.clear();
     block_mass_matrix.clear();
 
-    TrilinosWrappers::BlockSparsityPattern sp(partitioning,
-                                              partitioning,
-                                              relevant_partitioning,
-                                              MPI_COMM_WORLD);
+    dealii::TrilinosWrappers::BlockSparsityPattern sp(partitioning,
+                                                      partitioning,
+                                                      relevant_partitioning,
+                                                      MPI_COMM_WORLD);
 
-    Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
+    dealii::Table<2, dealii::DoFTools::Coupling> coupling(dim + 1, dim + 1);
     for (unsigned int c = 0; c < dim + 1; ++c)
       for (unsigned int d = 0; d < dim + 1; ++d)
         if (((c == dim) && (d == dim)))
-          coupling[c][d] = DoFTools::none;
+          coupling[c][d] = dealii::DoFTools::none;
         else
           {
             if (c < dim && d < dim)
               {
                 if (c == d)
-                  coupling[c][d] = DoFTools::always;
+                  coupling[c][d] = dealii::DoFTools::always;
                 else
-                  coupling[c][d] = DoFTools::none;
+                  coupling[c][d] = dealii::DoFTools::none;
               }
             else
-              coupling[c][d] = DoFTools::always;
+              coupling[c][d] = dealii::DoFTools::always;
           }
 
-    DoFTools::make_sparsity_pattern(dof_handler,
-                                    coupling,
-                                    sp,
-                                    constraints,
-                                    false,
-                                    Utilities::MPI::this_mpi_process(
-                                      MPI_COMM_WORLD));
+    dealii::DoFTools::make_sparsity_pattern(
+      dof_handler,
+      coupling,
+      sp,
+      constraints,
+      false,
+      dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD));
     sp.compress();
 
     system_matrix.reinit(sp);
@@ -407,31 +452,32 @@ namespace darcy
   template <int dim>
   void
   Darcy<dim>::setup_approx_schur_complement(
-    const std::vector<IndexSet> &partitioning,
-    const std::vector<IndexSet> &relevant_partitioning)
+    const std::vector<dealii::IndexSet> &partitioning,
+    const std::vector<dealii::IndexSet> &relevant_partitioning)
   {
     precondition_matrix.clear();
 
-    TrilinosWrappers::BlockSparsityPattern sp(partitioning,
-                                              partitioning,
-                                              relevant_partitioning,
-                                              MPI_COMM_WORLD);
+    dealii::TrilinosWrappers::BlockSparsityPattern sp(partitioning,
+                                                      partitioning,
+                                                      relevant_partitioning,
+                                                      MPI_COMM_WORLD);
 
-    Table<2, DoFTools::Coupling> coupling_precond(dim + 1, dim + 1);
+    dealii::Table<2, dealii::DoFTools::Coupling> coupling_precond(dim + 1,
+                                                                  dim + 1);
     for (unsigned int c = 0; c < dim + 1; ++c)
       for (unsigned int d = 0; d < dim + 1; ++d)
         if (c == d)
-          coupling_precond[c][d] = DoFTools::always;
+          coupling_precond[c][d] = dealii::DoFTools::always;
         else
-          coupling_precond[c][d] = DoFTools::none;
+          coupling_precond[c][d] = dealii::DoFTools::none;
 
-    DoFTools::make_sparsity_pattern(dof_handler,
-                                    coupling_precond,
-                                    sp,
-                                    constraints,
-                                    false,
-                                    Utilities::MPI::this_mpi_process(
-                                      MPI_COMM_WORLD));
+    dealii::DoFTools::make_sparsity_pattern(
+      dof_handler,
+      coupling_precond,
+      sp,
+      constraints,
+      false,
+      dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD));
     sp.compress();
 
     precondition_matrix.reinit(sp);
@@ -442,32 +488,33 @@ namespace darcy
   void
   Darcy<dim>::setup_grid_and_dofs()
   {
-    TimerOutput::Scope timing_section(computing_timer, "Setup dof systems");
+    dealii::TimerOutput::Scope timing_section(computing_timer,
+                                              "Setup dof systems");
     // velocity components are block 0 and pressure components are block 1
     std::vector<unsigned int> block_component(dim + 1, 0);
     block_component[dim] = 1;
 
     // generate grid and distribute dofs
-    GridGenerator::hyper_cube(triangulation, 0, 1);
+    dealii::GridGenerator::hyper_cube(triangulation, 0, 1);
     triangulation.refine_global(5); // 6 for HF, 5 for LF
     dof_handler.distribute_dofs(fe);
 
     // generate grid and distribute dofs for random field
     rf_dof_handler.distribute_dofs(rf_fe_system);
-    DoFRenumbering::Cuthill_McKee(
+    dealii::DoFRenumbering::Cuthill_McKee(
       rf_dof_handler); // Cuthill_McKee, component_wise to be more efficient
 
     // component wise renumbering
-    DoFRenumbering::Cuthill_McKee(
+    dealii::DoFRenumbering::Cuthill_McKee(
       dof_handler); // Cuthill_McKee, component_wise to be more efficient
-    DoFRenumbering::component_wise(dof_handler, block_component);
+    dealii::DoFRenumbering::component_wise(dof_handler, block_component);
 
     // count dofs per block
-    const std::vector<types::global_dof_index> dofs_per_block =
-      DoFTools::count_dofs_per_fe_block(dof_handler, block_component);
+    const std::vector<dealii::types::global_dof_index> dofs_per_block =
+      dealii::DoFTools::count_dofs_per_fe_block(dof_handler, block_component);
 
-    const types::global_dof_index n_u = dofs_per_block[0],
-                                  n_p = dofs_per_block[1];
+    const dealii::types::global_dof_index n_u = dofs_per_block[0],
+                                          n_p = dofs_per_block[1];
 
     std::locale s = pcout.get_stream().getloc();
     pcout.get_stream().imbue(std::locale(""));
@@ -481,19 +528,21 @@ namespace darcy
     pcout.get_stream().imbue(s);
 
     // create relevant index set
-    std::vector<IndexSet> partitioning, relevant_partitioning;
-    IndexSet              partitioning_rf, relevant_partitioning_rf;
-    IndexSet              relevant_set, relevant_set_rf;
+    std::vector<dealii::IndexSet> partitioning, relevant_partitioning;
+    dealii::IndexSet              partitioning_rf, relevant_partitioning_rf;
+    dealii::IndexSet              relevant_set, relevant_set_rf;
     {
-      IndexSet index_set    = dof_handler.locally_owned_dofs();
-      IndexSet index_set_rf = rf_dof_handler.locally_owned_dofs();
+      dealii::IndexSet index_set    = dof_handler.locally_owned_dofs();
+      dealii::IndexSet index_set_rf = rf_dof_handler.locally_owned_dofs();
 
       partitioning.push_back(index_set.get_view(0, n_u));
       partitioning.push_back(index_set.get_view(n_u, n_u + n_p));
       partitioning_rf = index_set_rf.get_view(0, rf_dof_handler.n_dofs());
 
-      relevant_set    = DoFTools::extract_locally_relevant_dofs(dof_handler);
-      relevant_set_rf = DoFTools::extract_locally_relevant_dofs(rf_dof_handler);
+      relevant_set =
+        dealii::DoFTools::extract_locally_relevant_dofs(dof_handler);
+      relevant_set_rf =
+        dealii::DoFTools::extract_locally_relevant_dofs(rf_dof_handler);
 
       relevant_partitioning.push_back(relevant_set.get_view(0, n_u));
       relevant_partitioning.push_back(relevant_set.get_view(n_u, n_u + n_p));
@@ -506,18 +555,17 @@ namespace darcy
     {
       // system constraints
       constraints.clear();
-      DoFTools::make_hanging_node_constraints(dof_handler, constraints);
+      dealii::DoFTools::make_hanging_node_constraints(dof_handler, constraints);
       constraints.close();
 
       // take care of constraints for preconditioner
       preconditioner_constraints.clear();
-      const FEValuesExtractors::Scalar pressure(dim);
-      DoFTools::make_hanging_node_constraints(dof_handler,
-                                              preconditioner_constraints);
+      const dealii::FEValuesExtractors::Scalar pressure(dim);
+      dealii::DoFTools::make_hanging_node_constraints(
+        dof_handler, preconditioner_constraints);
 
-      DoFTools::make_zero_boundary_constraints(dof_handler,
-                                               preconditioner_constraints,
-                                               fe.component_mask(pressure));
+      dealii::DoFTools::make_zero_boundary_constraints(
+        dof_handler, preconditioner_constraints, fe.component_mask(pressure));
       preconditioner_constraints.close();
     }
 
@@ -547,21 +595,22 @@ namespace darcy
   void
   Darcy<dim>::solve()
   {
-    TimerOutput::Scope timer_section(computing_timer, "   Solve system");
-    const auto        &M    = system_matrix.block(0, 0);
-    const auto        &ap_S = precondition_matrix.block(1, 1);
+    dealii::TimerOutput::Scope timer_section(computing_timer,
+                                             "   Solve system");
+    const auto                &M    = system_matrix.block(0, 0);
+    const auto                &ap_S = precondition_matrix.block(1, 1);
 
     // --------------------------- approx inverse M
     // ------------------------------------- Preconditioner M as incomplete
     // Cholesky decomposition
-    TrilinosWrappers::PreconditionIC ap_M_inv;
+    dealii::TrilinosWrappers::PreconditionIC ap_M_inv;
     ap_M_inv.initialize(M);
 
     // ------------------ approx inverse Schur as incomplete Cholesky
     // ---------------------
-    TrilinosWrappers::PreconditionIC ap_S_inv;
+    dealii::TrilinosWrappers::PreconditionIC ap_S_inv;
     ap_S_inv.initialize(ap_S);
-    const Preconditioner::InverseMatrix<TrilinosWrappers::SparseMatrix,
+    const Preconditioner::InverseMatrix<dealii::TrilinosWrappers::SparseMatrix,
                                         decltype(ap_S_inv)>
       op_S_inv(ap_S, ap_S_inv);
 
@@ -573,17 +622,19 @@ namespace darcy
     pcout << "Block preconditioner for the system matrix created." << std::endl;
 
     // ------------------ construct the final inverse operator for the system
-    SolverControl solver_control_system(system_matrix.m(),
-                                        1.0e-10 * system_rhs.l2_norm(),
-                                        true,
-                                        1.0e-10);
+    dealii::SolverControl solver_control_system(system_matrix.m(),
+                                                1.0e-10 * system_rhs.l2_norm(),
+                                                true,
+                                                1.0e-10);
 
     solver_control_system.enable_history_data();
     solver_control_system.log_history(true);
     solver_control_system.log_result(true);
-    SolverGMRES<TrilinosWrappers::MPI::BlockVector> solver_system(
-      solver_control_system,
-      SolverGMRES<TrilinosWrappers::MPI::BlockVector>::AdditionalData(100));
+    dealii::SolverGMRES<dealii::TrilinosWrappers::MPI::BlockVector>
+      solver_system(
+        solver_control_system,
+        dealii::SolverGMRES<
+          dealii::TrilinosWrappers::MPI::BlockVector>::AdditionalData(100));
 
     // ----------- distribute the constraints to the solution vector ---
     for (unsigned int i = 0; i < solution.size(); ++i)
@@ -591,7 +642,7 @@ namespace darcy
         solution(i) = 0;
 
     // ------------------ solve the system ---------------
-    TrilinosWrappers::MPI::BlockVector distributed_solution(system_rhs);
+    dealii::TrilinosWrappers::MPI::BlockVector distributed_solution(system_rhs);
     distributed_solution = solution;
     const unsigned int start =
                          (distributed_solution.block(0).size() +
