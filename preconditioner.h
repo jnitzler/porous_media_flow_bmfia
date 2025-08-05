@@ -2,6 +2,7 @@
 #ifndef PRECONDITIONER_H
 #define PRECONDITIONER_H
 
+#include <deal.II/base/enable_observer_pointer.h>
 #include <deal.II/base/exceptions.h>
 #include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/solver_control.h>
@@ -12,7 +13,7 @@ namespace Preconditioner
 
   // -----  inverse matrix class ----------------------
   template <class MatrixType, class PreconditionerType>
-  class InverseMatrix
+  class InverseMatrix : public dealii::EnableObserverPointer
   {
   public:
     InverseMatrix(const MatrixType         &m,
@@ -61,7 +62,7 @@ namespace Preconditioner
 
   // -----  block-preconditioner class -----------------
   template <class PreconditionerTypeaS, class PreconditionerTypeM>
-  class BlockSchurPreconditioner
+  class BlockSchurPreconditioner : public dealii::EnableObserverPointer
   {
   public:
     BlockSchurPreconditioner(
