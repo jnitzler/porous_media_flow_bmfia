@@ -1,5 +1,20 @@
+#include <deal.II/base/mpi.h>
+#include <deal.II/base/point.h>
+#include <deal.II/base/quadrature_lib.h>
+#include <deal.II/base/tensor.h>
+#include <deal.II/base/timer.h>
+#include <deal.II/base/types.h>
+#include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/fe_values_extractors.h>
+#include <deal.II/fe/mapping_q.h>
+#include <deal.II/lac/vector_operation.h>
+#include <filesystem>
+#include <string>
+
 #include "darcy.h"
 #include "darcy_general.h"
+#include "npy.hpp"
+#include "random_permeability.h"
 
 namespace darcy
 {
@@ -9,8 +24,8 @@ namespace darcy
   void
   Darcy<dim>::read_upstream_gradient_npy(const std::string &input_file_path)
   {
-    TimerOutput::Scope timing_section(computing_timer,
-                                      "read upstream gradient npy");
+    dealii::TimerOutput::Scope timing_section(computing_timer,
+                                              "read upstream gradient npy");
     // split the input file path into components
     std::filesystem::path my_path(input_file_path);
     std::filesystem::path base_dir = my_path.parent_path();
@@ -27,25 +42,18 @@ namespace darcy
                             fortran_order,
                             adjoint_data_vec);
 
-    // NOTE: the adjoint data vec has the following organization: velocity_1
-    // block, velocity_2, etc block construct final data vector from range based
-    // loop over time points
-
     // stucture of one data_vec: [grad_log_lik_y1, grad_log_lik_y2,
     // grad_log_lik_y3]
-    int          len_vec  = adjoint_data_vec.size();
-    int          num_data = len_vec / (dim + 1);
-    unsigned int k        = 0;
-    data_vec.resize(spatial_coordinates.size(), std::vector<double>(dim + 1));
-    for (auto &spatial_coordinate : spatial_coordinates)
+    int len_vec  = adjoint_data_vec.size();
+    int num_data = len_vec / (dim + 1);
+
+    data_vec.resize(num_data, std::vector<double>(dim + 1));
+    for (unsigned int k = 0; k < num_data; ++k)
       {
-        std::vector<double> data_coord(dim + 1);
         for (unsigned int i = 0; i < dim + 1; ++i)
           {
-            data_coord[i] = adjoint_data_vec[i * num_data + k];
+            data_vec[k][i] = adjoint_data_vec[i * num_data + k];
           }
-        data_vec[k] = data_coord;
-        ++k;
       }
   }
 
@@ -54,8 +62,8 @@ namespace darcy
   void
   Darcy<dim>::read_primary_solution(const std::string &output_path)
   {
-    TimerOutput::Scope         timing_section(computing_timer,
-                                      "read primary solution npy");
+    dealii::TimerOutput::Scope timing_section(computing_timer,
+                                              "read primary solution npy");
     std::vector<unsigned long> shape{};
     bool                       fortran_order;
 
@@ -94,24 +102,29 @@ namespace darcy
   void
   Darcy<dim>::overwrite_adjoint_rhs()
   {
-    TimerOutput::Scope timing_section(computing_timer, "Overwrite adjoint rhs");
+    dealii::TimerOutput::Scope timing_section(computing_timer,
+                                              "Overwrite adjoint rhs");
     system_rhs         = 0;
     unsigned int x_dim = rf_dof_handler.n_dofs();
     grad_log_lik_x_partial_distributed.resize(x_dim);
 
-    FEValuesExtractors::Vector velocities(0);
-    const unsigned int         dofs_per_cell = fe.n_dofs_per_cell();
-    const unsigned int dofs_per_cell_rf      = rf_fe_system.n_dofs_per_cell();
-    MappingQ<dim>      dummy_mapping(1);
-    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
-    std::vector<types::global_dof_index> local_dof_indices_rf(dofs_per_cell_rf);
+    //! unused?
+    dealii::FEValuesExtractors::Vector velocities(0);
+
+    const unsigned int dofs_per_cell    = fe.n_dofs_per_cell();
+    const unsigned int dofs_per_cell_rf = rf_fe_system.n_dofs_per_cell();
+
+    dealii::MappingQ<dim>                        dummy_mapping(1);
+    std::vector<dealii::types::global_dof_index> local_dof_indices(
+      dofs_per_cell);
+    std::vector<dealii::types::global_dof_index> local_dof_indices_rf(
+      dofs_per_cell_rf);
 
     // start the cell loop
     for (const auto &cell_tria : triangulation.active_cell_iterators())
       {
         const auto &cell = cell_tria->as_dof_handler_iterator(dof_handler);
-        const auto &rf_cell =
-          cell_tria->as_dof_handler_iterator(rf_dof_handler);
+
         // only consider locally owned cells
         if (cell->is_locally_owned())
           {
@@ -128,11 +141,10 @@ namespace darcy
               } // end loop experimental data points on current cell
 
             // loop over experimental data points on current cell
-            for (unsigned int k = 0; k < data_element_idx.size(); ++k)
+            for (unsigned int idx : data_element_idx)
               {
-                unsigned int idx = data_element_idx[k];
                 // transform physical point to unit cell point
-                Point<dim> current_cell_point =
+                dealii::Point<dim> current_cell_point =
                   dummy_mapping.transform_real_to_unit_cell(
                     cell, spatial_coordinates[idx]);
 
@@ -181,7 +193,7 @@ namespace darcy
 
           } // end if locally owned
       } // end cell loop
-    system_rhs.compress(VectorOperation::add);
+    system_rhs.compress(dealii::VectorOperation::add);
     pcout << "Successfully overwritten rhs..." << std::endl;
   }
 
@@ -223,7 +235,7 @@ namespace darcy
     unsigned int rows    = grad_log_lik_x.size();
     unsigned int columns = 1;
 
-    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
         const std::string filename = output_path + "_grad_solution.npy";
         write_data_to_npy(filename, grad_log_lik_x, rows, columns);
@@ -235,13 +247,13 @@ namespace darcy
   void
   Darcy<dim>::final_inner_adjoint_product()
   {
-    TimerOutput::Scope timer_section(computing_timer,
-                                     "Final inner adjoint product");
+    dealii::TimerOutput::Scope timer_section(computing_timer,
+                                             "Final inner adjoint product");
     pcout << "Final inner adjoint product with jacobi_k_mat_inv" << std::endl;
 
     // get tensor function and evaluate it at all dofs
-    unsigned int   x_dim = rf_dof_handler.n_dofs();
-    Tensor<2, dim> jacobi_k_mat_inv_value;
+    unsigned int           x_dim = rf_dof_handler.n_dofs();
+    dealii::Tensor<2, dim> jacobi_k_mat_inv_value;
 
     // reinit the final gradient vector
     grad_log_lik_x.resize(x_dim);
@@ -249,33 +261,36 @@ namespace darcy
 
     // quadrature formula, fe values and dofs
     // standard gauss quadrature
-    const QGauss<dim>  quadrature(degree_u +
-                                 1); // we choose a coarser quadrature here
-    FEValues<dim>      fe_values(fe,
-                            quadrature,
-                            update_quadrature_points | update_values |
-                              update_JxW_values);
-    FEValues<dim>      fe_rf_values(rf_fe_system,
-                               quadrature,
-                               update_values | update_quadrature_points);
-    const unsigned int n_q_points = quadrature.size();
+    const dealii::QGauss<dim> quadrature(
+      degree_u + 1); // we choose a coarser quadrature here
+    dealii::FEValues<dim> fe_values(fe,
+                                    quadrature,
+                                    dealii::update_quadrature_points |
+                                      dealii::update_values |
+                                      dealii::update_JxW_values);
+    dealii::FEValues<dim> fe_rf_values(rf_fe_system,
+                                       quadrature,
+                                       dealii::update_values |
+                                         dealii::update_quadrature_points);
+    const unsigned int    n_q_points = quadrature.size();
     // other stuff
-    FEValuesExtractors::Vector velocities(0);
-    const unsigned int         dofs_per_cell = fe.n_dofs_per_cell();
-    const unsigned int rf_dofs_per_cell      = rf_fe_system.n_dofs_per_cell();
+    dealii::FEValuesExtractors::Vector velocities(0);
+    const unsigned int                 dofs_per_cell = fe.n_dofs_per_cell();
+    const unsigned int rf_dofs_per_cell = rf_fe_system.n_dofs_per_cell();
 
     // local to global mapping for random field
-    std::vector<types::global_dof_index> local_rf_dof_indices(rf_dofs_per_cell);
+    std::vector<dealii::types::global_dof_index> local_rf_dof_indices(
+      rf_dofs_per_cell);
 
     // local to global dof mapping for solution
-    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+    std::vector<dealii::types::global_dof_index> local_dof_indices(
+      dofs_per_cell);
     solution_distributed         = solution;
     solution_primary_distributed = solution_primary_problem;
 
     // instantiate some variables
-    Tensor<1, dim>          velocity_dofs_vec;
-    std::vector<Point<dim>> q_points(n_q_points);
-    double                  JxW_q;
+    std::vector<dealii::Point<dim>> q_points(n_q_points);
+    double                          JxW_q;
 
     // start the cell loop
     for (const auto &cell_tria : triangulation.active_cell_iterators())
@@ -312,7 +327,7 @@ namespace darcy
                 JxW_q = fe_values.JxW(q);
 
                 //  ----- precompute fe_values stuff
-                std::vector<Tensor<1, dim>> fe_values_velocities_vec(
+                std::vector<dealii::Tensor<1, dim>> fe_values_velocities_vec(
                   dofs_per_cell);
                 for (unsigned int ii = 0; ii < dofs_per_cell; ++ii)
                   {
@@ -331,7 +346,7 @@ namespace darcy
                     // ------ outer loop over all dofs of the cell -----------
                     for (unsigned int i = 0; i < dofs_per_cell; ++i)
                       {
-                        const Tensor<1, dim> phi_i_u =
+                        const dealii::Tensor<1, dim> phi_i_u =
                           fe_values_velocities_vec[i];
                         double local_solution_i_JxW = solution_local[i] * JxW_q;
                         const auto pre_mult = phi_i_u * jacobi_k_mat_inv_value;
@@ -339,7 +354,7 @@ namespace darcy
                         // ----- inner loop over all dofs of the cell ---------
                         for (unsigned int j = 0; j < dofs_per_cell; ++j)
                           {
-                            const Tensor<1, dim> phi_j_u =
+                            const dealii::Tensor<1, dim> phi_j_u =
                               fe_values_velocities_vec[j];
                             double local_primary_j = solution_primary_local[j];
 
@@ -359,9 +374,9 @@ namespace darcy
       } // end loop cell
     pcout << "grad_log_x (distributed) successfully assembled!" << std::endl;
 
-    Utilities::MPI::sum(grad_log_lik_x_distributed,
-                        MPI_COMM_WORLD,
-                        grad_log_lik_x);
+    dealii::Utilities::MPI::sum(grad_log_lik_x_distributed,
+                                MPI_COMM_WORLD,
+                                grad_log_lik_x);
     pcout << "Successfully summed grad_log_lik_x over processors" << std::endl;
   }
 
@@ -377,9 +392,11 @@ main(int argc, char *argv[])
   try
     {
       using namespace darcy;
-      Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
-      const unsigned int               fe_degree = 1;
-      Darcy<2>                         mixed_laplace_problem(fe_degree);
+      dealii::Utilities::MPI::MPI_InitFinalize mpi_initialization(argc,
+                                                                  argv,
+                                                                  1);
+      const unsigned int                       fe_degree = 1;
+      Darcy<2>                                 mixed_laplace_problem(fe_degree);
       mixed_laplace_problem.run(input_file_path, output_file_path);
     }
   catch (std::exception &exc)

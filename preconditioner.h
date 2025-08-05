@@ -2,15 +2,18 @@
 #ifndef PRECONDITIONER_H
 #define PRECONDITIONER_H
 
-#include "darcy.h"
+#include <deal.II/base/enable_observer_pointer.h>
+#include <deal.II/base/exceptions.h>
+#include <deal.II/lac/solver_cg.h>
+#include <deal.II/lac/solver_control.h>
+#include <deal.II/lac/trilinos_block_sparse_matrix.h>
 
 namespace Preconditioner
 {
-  using namespace dealii;
 
   // -----  inverse matrix class ----------------------
   template <class MatrixType, class PreconditionerType>
-  class InverseMatrix : public Subscriptor
+  class InverseMatrix : public dealii::EnableObserverPointer
   {
   public:
     InverseMatrix(const MatrixType         &m,
@@ -42,8 +45,8 @@ namespace Preconditioner
     VectorType       &dst,
     const VectorType &src) const
   {
-    SolverControl        solver_control(src.size(), 1e-7 * src.l2_norm());
-    SolverCG<VectorType> cg(solver_control);
+    dealii::SolverControl solver_control(src.size(), 1e-7 * src.l2_norm());
+    dealii::SolverCG<VectorType> cg(solver_control);
 
     dst = 0;
 
@@ -53,35 +56,37 @@ namespace Preconditioner
       }
     catch (std::exception &e)
       {
-        Assert(false, ExcMessage(e.what()));
+        Assert(false, dealii::ExcMessage(e.what()));
       }
   }
 
   // -----  block-preconditioner class -----------------
   template <class PreconditionerTypeaS, class PreconditionerTypeM>
-  class BlockSchurPreconditioner : public Subscriptor
+  class BlockSchurPreconditioner : public dealii::EnableObserverPointer
   {
   public:
-    BlockSchurPreconditioner(const TrilinosWrappers::BlockSparseMatrix &System,
-                             const PreconditionerTypeaS &ap_S_inv,
-                             const PreconditionerTypeM  &ap_M_inv);
+    BlockSchurPreconditioner(
+      const dealii::TrilinosWrappers::BlockSparseMatrix &System,
+      const PreconditionerTypeaS                        &ap_S_inv,
+      const PreconditionerTypeM                         &ap_M_inv);
 
     void
-    vmult(TrilinosWrappers::MPI::BlockVector       &dst,
-          const TrilinosWrappers::MPI::BlockVector &src) const;
+    vmult(dealii::TrilinosWrappers::MPI::BlockVector       &dst,
+          const dealii::TrilinosWrappers::MPI::BlockVector &src) const;
 
   private:
-    const TrilinosWrappers::BlockSparseMatrix &system_matrix;
-    const PreconditionerTypeaS                &ap_S_inv;
-    const PreconditionerTypeM                 &ap_M_inv;
+    const dealii::TrilinosWrappers::BlockSparseMatrix &system_matrix;
+    const PreconditionerTypeaS                        &ap_S_inv;
+    const PreconditionerTypeM                         &ap_M_inv;
   };
 
   // constructor
   template <class PreconditionerTypeaS, class PreconditionerTypeM>
   BlockSchurPreconditioner<PreconditionerTypeaS, PreconditionerTypeM>::
-    BlockSchurPreconditioner(const TrilinosWrappers::BlockSparseMatrix &System,
-                             const PreconditionerTypeaS &ap_S_inv,
-                             const PreconditionerTypeM  &ap_M_inv)
+    BlockSchurPreconditioner(
+      const dealii::TrilinosWrappers::BlockSparseMatrix &System,
+      const PreconditionerTypeaS                        &ap_S_inv,
+      const PreconditionerTypeM                         &ap_M_inv)
     : system_matrix(System)
     , ap_S_inv(ap_S_inv)
     , ap_M_inv(ap_M_inv)
@@ -90,10 +95,10 @@ namespace Preconditioner
   template <class PreconditionerTypeaS, class PreconditionerTypeM>
   void
   BlockSchurPreconditioner<PreconditionerTypeaS, PreconditionerTypeM>::vmult(
-    TrilinosWrappers::MPI::BlockVector       &dst,
-    const TrilinosWrappers::MPI::BlockVector &src) const
+    dealii::TrilinosWrappers::MPI::BlockVector       &dst,
+    const dealii::TrilinosWrappers::MPI::BlockVector &src) const
   {
-    TrilinosWrappers::MPI::Vector utmp(src.block(1));
+    dealii::TrilinosWrappers::MPI::Vector utmp(src.block(1));
     // tmp(complete_index_set(system_matrix.block(1, 1).m())) // there is a
     // problem in parallel
     ap_M_inv.vmult(dst.block(0), src.block(0));
@@ -101,5 +106,7 @@ namespace Preconditioner
     utmp *= -1;
     ap_S_inv.vmult(dst.block(1), utmp);
   }
+
 } // end namespace Preconditioner
+
 #endif

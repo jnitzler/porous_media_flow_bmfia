@@ -1,6 +1,15 @@
+
 #include "darcy.h"
 
 #include <cstddef>
+#include <deal.II/base/mpi.h>
+#include <deal.II/base/mpi_remote_point_evaluation.h>
+#include <deal.II/base/types.h>
+#include <deal.II/fe/mapping_q.h>
+#include <deal.II/numerics/data_component_interpretation.h>
+#include <deal.II/numerics/data_out.h>
+#include <deal.II/numerics/vector_tools.h>
+#include <vector>
 
 #include "darcy_general.h"
 
@@ -14,20 +23,20 @@ namespace darcy // same namespace and in header file
   {
     // collect data of interest to write out in output_data
     // set up a dummy mapping
-    MappingQ<dim> dummy_mapping(1);
+    dealii::MappingQ<dim> dummy_mapping(1);
 
     //  // get the solution values at the points of interest for time step
     solution_distributed = solution; // take care of the distributed solution
                                      //
-    Utilities::MPI::RemotePointEvaluation<dim> evaluation_cache(1.0e-9);
-    const auto data_array = VectorTools::point_values<dim>(dummy_mapping,
-                                                           dof_handler,
-                                                           solution_distributed,
-                                                           spatial_coordinates,
-                                                           evaluation_cache);
+    dealii::Utilities::MPI::RemotePointEvaluation<dim> evaluation_cache(1.0e-9);
+    const auto                                         data_array =
+      dealii::VectorTools::point_values<dim>(dummy_mapping,
+                                             dof_handler,
+                                             solution_distributed,
+                                             spatial_coordinates,
+                                             evaluation_cache);
 
-    unsigned int num_dofs_total = dof_handler.n_dofs();
-    unsigned int num_vel_vecs   = data_array.size();
+    unsigned int num_vel_vecs = data_array.size();
 
     // append them to the data vector
     std::vector<double> l_output_data(dim * num_vel_vecs);
@@ -43,7 +52,7 @@ namespace darcy // same namespace and in header file
       }
 
 
-    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
         const std::string  filename = output_path + "_sol.npy";
         const unsigned int num_data = l_output_data.size();
@@ -61,17 +70,18 @@ namespace darcy // same namespace and in header file
   {
     // collect data of interest to write out in output_data
     // set up a dummy mapping
-    MappingQ<dim> dummy_mapping(1);
+    dealii::MappingQ<dim> dummy_mapping(1);
 
     x_vec_distributed = x_vec;
 
     // set up a cache / remote evaluation object
-    Utilities::MPI::RemotePointEvaluation<dim, dim> remote_eval_obj;
+    dealii::Utilities::MPI::RemotePointEvaluation<dim, dim> remote_eval_obj;
     remote_eval_obj.reinit(spatial_coordinates, triangulation, dummy_mapping);
 
-    const auto data_array = VectorTools::point_values<1>(remote_eval_obj,
-                                                         rf_dof_handler,
-                                                         x_vec_distributed);
+    const auto data_array =
+      dealii::VectorTools::point_values<1>(remote_eval_obj,
+                                           rf_dof_handler,
+                                           x_vec_distributed);
 
     unsigned int num_x_vec = data_array.size();
 
@@ -82,7 +92,7 @@ namespace darcy // same namespace and in header file
         feature_vec[i] = data_array[i];
       }
 
-    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
         const std::string  filename = output_path + "_features.npy";
         const unsigned int num_data = feature_vec.size();
@@ -101,7 +111,7 @@ namespace darcy // same namespace and in header file
     solution_distributed = solution;
 
     // only resize full solution vector on rank 0 to save memory
-    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
         full_solution.resize(dof_handler.n_dofs(), 0.0);
       }
@@ -111,21 +121,22 @@ namespace darcy // same namespace and in header file
     for (unsigned int i = 0; i < dof_handler.n_dofs(); ++i)
       {
         double temp;
-        temp = Utilities::MPI::reduce<double>(solution.in_local_range(i) ?
-                                                solution[i] :
-                                                0.0,
-                                              MPI_COMM_WORLD,
-                                              custom_fuse,
-                                              0);
+        temp =
+          dealii::Utilities::MPI::reduce<double>(solution.in_local_range(i) ?
+                                                   solution[i] :
+                                                   0.0,
+                                                 MPI_COMM_WORLD,
+                                                 custom_fuse,
+                                                 0);
 
-        if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+        if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
           {
             full_solution[i] = temp;
           }
       }
 
     // write the gathered solution that exists on rank 0 to one file
-    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
         std::string filename = output_path + "_solution_full.npy";
         pcout << "Writing full solution to file: " << filename << std::endl;
@@ -148,14 +159,15 @@ namespace darcy // same namespace and in header file
     // define the solution vector
     std::vector<std::string> solution_names(dim, "u");
     solution_names.emplace_back("p");
-    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-      interpretation(dim,
-                     DataComponentInterpretation::component_is_part_of_vector);
+    std::vector<
+      dealii::DataComponentInterpretation::DataComponentInterpretation>
+      interpretation(
+        dim, dealii::DataComponentInterpretation::component_is_part_of_vector);
     interpretation.emplace_back(
-      DataComponentInterpretation::component_is_scalar);
+      dealii::DataComponentInterpretation::component_is_scalar);
 
-    DataOut<dim>          data_out;
-    DataOutBase::VtkFlags flags;
+    dealii::DataOut<dim>          data_out;
+    dealii::DataOutBase::VtkFlags flags;
     flags.write_higher_order_cells = true;
     data_out.set_flags(flags);
     data_out.add_data_vector(dof_handler,
@@ -164,14 +176,17 @@ namespace darcy // same namespace and in header file
                              interpretation);
 
     // define the subdomains
-    Vector<float> subdomain(triangulation.n_active_cells());
+    // TODO! this doesn´t seem right
+    dealii::Vector<float> subdomain(triangulation.n_active_cells());
     for (unsigned int i = 0; i < subdomain.size(); ++i)
       subdomain(i) = triangulation.locally_owned_subdomain();
     data_out.add_data_vector(subdomain, "subdomain");
 
     // build the patches
-    MappingQ<dim> mapping(1); // linear mapping
-    data_out.build_patches(mapping, degree_u, DataOut<dim>::curved_inner_cells);
+    dealii::MappingQ<dim> mapping(1); // linear mapping
+    data_out.build_patches(mapping,
+                           degree_u,
+                           dealii::DataOut<dim>::curved_inner_cells);
 
     constexpr unsigned int num_vtu_files    = 4;
     constexpr unsigned int n_digits_counter = 2;
@@ -189,11 +204,11 @@ namespace darcy // same namespace and in header file
       output_path.substr(found + 1) + "_random_field";
     const std::string stripped_path_rf = output_path.substr(0, found + 1);
 
-    DataOut<dim> data_out_rf;
+    dealii::DataOut<dim> data_out_rf;
     data_out_rf.set_flags(flags);
 
-    std::string    random_field_names = "k";
-    Vector<double> rf(x_vec.size());
+    std::string            random_field_names = "k";
+    dealii::Vector<double> rf(x_vec.size());
     for (unsigned int i = 0; i < x_vec.size(); ++i)
       {
         rf[i] = std::exp(x_vec[i]);
@@ -253,11 +268,10 @@ main(int argc, char *argv[])
 
   try
     {
-      using namespace darcy;
-      Utilities::MPI::MPI_InitFinalize mpi_initialization(
-        argc, argv, numbers::invalid_unsigned_int);
+      dealii::Utilities::MPI::MPI_InitFinalize mpi_initialization(
+        argc, argv, dealii::numbers::invalid_unsigned_int);
       const unsigned int fe_degree = 1;
-      Darcy<2>           mixed_laplace_problem(fe_degree);
+      darcy::Darcy<2>    mixed_laplace_problem(fe_degree);
       mixed_laplace_problem.run(input_file_path, output_file_path);
     }
   catch (std::exception &exc)
