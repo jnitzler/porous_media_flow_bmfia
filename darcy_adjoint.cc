@@ -42,26 +42,18 @@ namespace darcy
                             fortran_order,
                             adjoint_data_vec);
 
-    // NOTE: the adjoint data vec has the following organization: velocity_1
-    // block, velocity_2, etc block construct final data vector from range based
-    // loop over time points
-
     // stucture of one data_vec: [grad_log_lik_y1, grad_log_lik_y2,
     // grad_log_lik_y3]
-    int          len_vec  = adjoint_data_vec.size();
-    int          num_data = len_vec / (dim + 1);
-    unsigned int k        = 0;
-    data_vec.resize(spatial_coordinates.size(), std::vector<double>(dim + 1));
-    // TODO! unused?
-    for (auto &spatial_coordinate : spatial_coordinates)
+    int len_vec  = adjoint_data_vec.size();
+    int num_data = len_vec / (dim + 1);
+
+    data_vec.resize(num_data, std::vector<double>(dim + 1));
+    for (unsigned int k = 0; k < num_data; ++k)
       {
-        std::vector<double> data_coord(dim + 1);
         for (unsigned int i = 0; i < dim + 1; ++i)
           {
-            data_coord[i] = adjoint_data_vec[i * num_data + k];
+            data_vec[k][i] = adjoint_data_vec[i * num_data + k];
           }
-        data_vec[k] = data_coord;
-        ++k;
       }
   }
 
@@ -132,9 +124,7 @@ namespace darcy
     for (const auto &cell_tria : triangulation.active_cell_iterators())
       {
         const auto &cell = cell_tria->as_dof_handler_iterator(dof_handler);
-        //! unused?
-        const auto &rf_cell =
-          cell_tria->as_dof_handler_iterator(rf_dof_handler);
+
         // only consider locally owned cells
         if (cell->is_locally_owned())
           {
@@ -299,8 +289,6 @@ namespace darcy
     solution_primary_distributed = solution_primary_problem;
 
     // instantiate some variables
-    // TODO! unused?
-    dealii::Tensor<1, dim>          velocity_dofs_vec;
     std::vector<dealii::Point<dim>> q_points(n_q_points);
     double                          JxW_q;
 
