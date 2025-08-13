@@ -25,6 +25,7 @@ ParameterReader::declare_parameters()
 
     // dealii::DataOutInterface<1>::declare_parameters(prm);
   }
+  prm.leave_subsection();
 
   prm.enter_subsection("Mesh and geometry parameters");
   {
@@ -33,6 +34,7 @@ ParameterReader::declare_parameters()
                       dealii::Patterns::Integer(0),
                       "Number of global mesh refinement steps");
   }
+  prm.leave_subsection();
 
   prm.enter_subsection("Finite element parameters");
   {
@@ -41,6 +43,7 @@ ParameterReader::declare_parameters()
                       dealii::Patterns::Integer(1),
                       "Degree of the polynomial approximation for pressure");
   }
+  prm.leave_subsection();
 }
 
 void
