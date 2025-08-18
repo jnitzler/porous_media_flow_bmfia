@@ -53,23 +53,25 @@ ninja
 
 ## Running the executables
 
-The executables require the following input arguments:
+The executables requires an input argument:
 
-- a path to an input file `<path/to/x_input.npy>`
-- a path to the output directory `<path/to/output_dir>`
+- a path to the parameter file in `json` format `<path/to/parameters.json>`
 
+You can have a look at the provided parameter files to see which options you have.
+
+@jonas FIX:
 The adjoint executable requires additionally a file `adjoint_data.npy` (containing the partial derivative w.r.t. the likelihood function that serves as a right-hand side in the adjoint solve) which has to be located in the same directory as the input file `<path/to/x_input.npy>` and is *not* an input argument but will be loaded directly once the input file is specified.
 
 The forward problem can be started with:
 
 ```bash
-mpirun -np <num_procs> darcy <path/to/x_input.npy> <path/to/output_dir>
+mpirun -np <num_procs> darcy <path/to/parameters.json>
 ```
 
 The associated adjoint problem with:
 
 ```bash
-mpirun -np <num_procs> darcy_adjoint <path/to/x_input.npy> <path/to/output_dir>
+mpirun -np <num_procs> darcy_adjoint <path/to/parameters.json>
 ```
 
 ## Associated deal.II tutorials

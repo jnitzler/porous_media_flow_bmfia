@@ -1,0 +1,12 @@
+{
+  "File input and output": {
+    "Numpy input file name": "input_dir/x_array.np",
+    "Output file name": "output_dir/output"
+  },
+  "Mesh and geometry parameters": {
+    "Number of refinements": 1
+  },
+  "Finite element parameters": {
+    "Pressure polynomial degree": 1
+  }
+}
