@@ -93,8 +93,8 @@ namespace darcy
   {
     prm.enter_subsection("File input and output");
     {
-      npy_input_file_name = prm.get("Numpy input file name");
-      output_file_name    = prm.get("Output file name");
+      npy_input_file_path = prm.get("Numpy input file path");
+      output_file_prefix = prm.get("Output file prefix");
       // data_out.parse_parameters(prm);
     }
     prm.leave_subsection();
@@ -116,7 +116,7 @@ namespace darcy
   // ------ read input file ------------------------------
   template <int dim>
   void
-  Darcy<dim>::read_input_npy(const std::string &filename)
+  Darcy<dim>::read_input_npy(const std::string &file_path)
   {
     dealii::TimerOutput::Scope timer_section(computing_timer, "   Read Inputs");
 
@@ -125,10 +125,10 @@ namespace darcy
 
     // read in the permeability field
     std::vector<double> x_std_vec;
-    npy::LoadArrayFromNumpy(filename, shape, fortran_order, x_std_vec);
+    npy::LoadArrayFromNumpy(file_path, shape, fortran_order, x_std_vec);
 
     unsigned int n_dofs_rf = rf_dof_handler.n_dofs();
-    pcout << "Read in random field from file: " << filename << std::endl;
+    pcout << "Read in random field from file: " << file_path << std::endl;
     pcout << "Number of random field dofs: " << x_vec.size() << std::endl;
     pcout << "Number of input field dofs: " << x_std_vec.size() << std::endl;
     for (unsigned int i = 0; i < n_dofs_rf; ++i)
@@ -695,7 +695,7 @@ namespace darcy
 
   template <int dim>
   void
-  Darcy<dim>::write_data_to_npy(const std::string   &filename,
+  Darcy<dim>::write_data_to_npy(const std::string   &file_path,
                                 std::vector<double> &data,
                                 const unsigned int   rows,
                                 const unsigned int   columns) const
@@ -703,7 +703,7 @@ namespace darcy
     const std::vector<long unsigned> shape{rows, columns};
     const bool                       fortran_order{false};
     npy::SaveArrayAsNumpy(
-      filename, fortran_order, shape.size(), shape.data(), data);
+      file_path, fortran_order, shape.size(), shape.data(), data);
   }
 
 } // end of namespace darcy

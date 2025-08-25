@@ -68,14 +68,14 @@ namespace darcy
     bool                       fortran_order;
 
     // split the input file path into components
-    std::string filename = output_path + "_solution_full.npy";
-    pcout << "Reading primary solution from " << filename << std::endl;
+    std::string file_path = output_path + "_solution_full.npy";
+    pcout << "Reading primary solution from " << file_path << std::endl;
 
     std::vector<double> tmp_primary_solution;
     tmp_primary_solution.resize(
       dof_handler.n_dofs()); // temp vector for primary solution
 
-    npy::LoadArrayFromNumpy(filename,
+    npy::LoadArrayFromNumpy(file_path,
                             shape,
                             fortran_order,
                             tmp_primary_solution);
@@ -202,7 +202,7 @@ namespace darcy
   Darcy<dim>::run()
   {
     generate_coordinates();
-    read_upstream_gradient_npy(npy_input_file_name);
+    read_upstream_gradient_npy(npy_input_file_path);
     run_simulation();
 
     pcout << "Adjoint problem solved successfully!" << std::endl;
@@ -218,9 +218,9 @@ namespace darcy
   Darcy<dim>::run_simulation()
   {
     setup_grid_and_dofs();
-    read_input_npy(npy_input_file_name);
+    read_input_npy(npy_input_file_path);
     // generate_ref_input();
-    read_primary_solution(output_file_name); // this needs the dof handler hence
+    read_primary_solution(output_file_prefix); // this needs the dof handler hence
                                              // after setup_grid_and_dofs
     assemble_approx_schur_complement();
     assemble_system(); // we assemble a wrong rhs for the adjoint first and
@@ -235,8 +235,8 @@ namespace darcy
 
     if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
-        const std::string filename = output_file_name + "_grad_solution.npy";
-        write_data_to_npy(filename, grad_log_lik_x, rows, columns);
+        const std::string file_path = output_file_prefix + "_grad_solution.npy";
+        write_data_to_npy(file_path, grad_log_lik_x, rows, columns);
       }
   }
 

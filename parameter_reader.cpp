@@ -13,15 +13,15 @@ ParameterReader::declare_parameters()
 {
   prm.enter_subsection("File input and output");
   {
-    prm.declare_entry("Numpy input file name",
+    prm.declare_entry("Numpy input file path",
                       "input",
                       dealii::Patterns::Anything(),
-                      "Name of the numpy input file (with extension)");
+                      "Path to the numpy input file (with extension)");
 
-    prm.declare_entry("Output file name",
+    prm.declare_entry("Output file prefix",
                       "solution",
                       dealii::Patterns::Anything(),
-                      "Name of the output file (without extension)");
+                      "Output file prefix path (no extensions)");
 
     // dealii::DataOutInterface<1>::declare_parameters(prm);
   }

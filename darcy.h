@@ -66,7 +66,7 @@ namespace darcy
     output_field_at_observation_points_npy(const std::string &output_path);
 
     void
-    write_data_to_npy(const std::string   &filename,
+    write_data_to_npy(const std::string   &file_path,
                       std::vector<double> &data,
                       unsigned int         rows,
                       unsigned int         columns) const;
@@ -80,8 +80,8 @@ namespace darcy
     unsigned int degree_p; // degree of pressure space
     unsigned int degree_u; // degree of velocity space
     unsigned int n_refinements;
-    std::string  npy_input_file_name;
-    std::string  output_file_name;
+    std::string  npy_input_file_path;
+    std::string  output_file_prefix;
 
     dealii::ParameterHandler &prm;
 

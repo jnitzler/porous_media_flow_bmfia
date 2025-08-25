@@ -1,7 +1,7 @@
 {
   "File input and output": {
-    "Numpy input file name": "input_dir/x_array.np",
-    "Output file name": "output_dir/output"
+    "Numpy input file path": "input_dir/x_array.npy",
+    "Output file prefix": "output_dir/output_prefix"
   },
   "Mesh and geometry parameters": {
     "Number of refinements": 1
