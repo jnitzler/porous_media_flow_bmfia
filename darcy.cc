@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/mpi_remote_point_evaluation.h>
+#include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/types.h>
 #include <deal.II/fe/mapping_q.h>
 #include <deal.II/numerics/data_component_interpretation.h>
@@ -12,6 +13,7 @@
 #include <vector>
 
 #include "darcy_general.h"
+#include "parameter_reader.h"
 
 namespace darcy // same namespace and in header file
 {
@@ -54,9 +56,9 @@ namespace darcy // same namespace and in header file
 
     if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
-        const std::string  filename = output_path + "_sol.npy";
+        const std::string  file_path = output_path + "_sol.npy";
         const unsigned int num_data = l_output_data.size();
-        write_data_to_npy(filename, l_output_data, num_data, 1);
+        write_data_to_npy(file_path, l_output_data, num_data, 1);
       }
   }
 
@@ -94,9 +96,9 @@ namespace darcy // same namespace and in header file
 
     if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
-        const std::string  filename = output_path + "_features.npy";
+        const std::string  file_path = output_path + "_features.npy";
         const unsigned int num_data = feature_vec.size();
-        write_data_to_npy(filename, feature_vec, num_data, 1);
+        write_data_to_npy(file_path, feature_vec, num_data, 1);
       }
   }
 
@@ -138,12 +140,12 @@ namespace darcy // same namespace and in header file
     // write the gathered solution that exists on rank 0 to one file
     if (dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
       {
-        std::string filename = output_path + "_solution_full.npy";
-        pcout << "Writing full solution to file: " << filename << std::endl;
+        std::string file_path = output_path + "_solution_full.npy";
+        pcout << "Writing full solution to file: " << file_path << std::endl;
         pcout << "Size of full solution: " << full_solution.size() << std::endl;
         pcout << "Number of dofs: " << dof_handler.n_dofs() << std::endl;
         // Assuming write_data_to_npy correctly writes the data in NumPy format
-        write_data_to_npy(filename, full_solution, full_solution.size(), 1);
+        write_data_to_npy(file_path, full_solution, full_solution.size(), 1);
       } // end output_npy
   }
 
@@ -153,7 +155,7 @@ namespace darcy // same namespace and in header file
   Darcy<dim>::output_pvtu(const std::string &output_path) const
   {
     const std::size_t found    = output_path.find_last_of("/\\");
-    const std::string filename = output_path.substr(found + 1) + "_solution";
+    const std::string file_path = output_path.substr(found + 1) + "_solution";
     const std::string stripped_path = output_path.substr(0, found + 1);
 
     // define the solution vector
@@ -193,7 +195,7 @@ namespace darcy // same namespace and in header file
     constexpr unsigned int cycle = 0; // a counter for iterative output
     std::cout << "stripped_path: " << stripped_path << std::endl;
     data_out.write_vtu_with_pvtu_record(stripped_path,
-                                        filename,
+                                        file_path,
                                         cycle,
                                         MPI_COMM_WORLD,
                                         n_digits_counter,
@@ -227,9 +229,9 @@ namespace darcy // same namespace and in header file
   // ----------------- run methods -----------------
   template <int dim>
   void
-  Darcy<dim>::run(const std::string &input_path, const std::string &output_path)
+  Darcy<dim>::run()
   {
-    run_simulation(input_path, output_path);
+    run_simulation();
 
     computing_timer.print_summary();
     computing_timer.reset();
@@ -238,11 +240,10 @@ namespace darcy // same namespace and in header file
 
   template <int dim>
   void
-  Darcy<dim>::run_simulation(const std::string &input_path,
-                             const std::string &output_path)
+  Darcy<dim>::run_simulation()
   {
     setup_grid_and_dofs();
-    read_input_npy(input_path);
+    read_input_npy(npy_input_file_path);
     // generate_ref_input(); // optional for testing: not gt
     generate_coordinates();
     assemble_approx_schur_complement();
@@ -250,10 +251,10 @@ namespace darcy // same namespace and in header file
     solve();
 
     // output the results
-    output_pvtu(output_path);
-    output_full_velocity_npy(output_path);
-    output_velocity_at_observation_points_npy(output_path);
-    output_field_at_observation_points_npy(output_path);
+    output_pvtu(output_file_prefix);
+    output_full_velocity_npy(output_file_prefix);
+    output_velocity_at_observation_points_npy(output_file_prefix);
+    output_field_at_observation_points_npy(output_file_prefix);
 
   } // end run simulation
 
@@ -263,16 +264,17 @@ namespace darcy // same namespace and in header file
 int
 main(int argc, char *argv[])
 {
-  std::string input_file_path  = argv[1];
-  std::string output_file_path = argv[2];
+  const std::string        prm_file_path{argv[1]};
+  dealii::ParameterHandler prm;
+  ParameterReader          prm_reader(prm);
+  prm_reader.read_parameters(prm_file_path);
 
   try
     {
       dealii::Utilities::MPI::MPI_InitFinalize mpi_initialization(
         argc, argv, dealii::numbers::invalid_unsigned_int);
-      const unsigned int fe_degree = 1;
-      darcy::Darcy<2>    mixed_laplace_problem(fe_degree);
-      mixed_laplace_problem.run(input_file_path, output_file_path);
+      darcy::Darcy<2> mixed_laplace_problem(prm);
+      mixed_laplace_problem.run();
     }
   catch (std::exception &exc)
     {

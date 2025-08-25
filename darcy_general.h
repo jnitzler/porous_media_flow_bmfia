@@ -4,6 +4,7 @@
 #include <deal.II/base/function.h>
 #include <deal.II/base/index_set.h>
 #include <deal.II/base/mpi.h>
+#include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/point.h>
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/table.h>
@@ -73,14 +74,13 @@ namespace darcy
 
   // ------ class constructor ----------------
   template <int dim>
-  Darcy<dim>::Darcy(const unsigned int degree_p)
-    : degree_p(degree_p)
-    , degree_u(degree_p + 1)
+  Darcy<dim>::Darcy(dealii::ParameterHandler &prm)
+    : prm(prm)
     , triangulation(MPI_COMM_WORLD,
                     typename dealii::Triangulation<dim>::MeshSmoothing(
                       dealii::Triangulation<dim>::smoothing_on_refinement |
                       dealii::Triangulation<dim>::smoothing_on_coarsening))
-    , fe(dealii::FE_Q<dim>(degree_u), dim, dealii::FE_Q<dim>(degree_p), 1)
+    , fe(nullptr)
     , dof_handler(triangulation)
     , rf_fe_system(dealii::FE_Q<dim>(1), 1)
     , rf_dof_handler(triangulation)
@@ -90,12 +90,33 @@ namespace darcy
                       pcout,
                       dealii::TimerOutput::never,
                       dealii::TimerOutput::wall_times)
-  {}
+  {
+    prm.enter_subsection("File input and output");
+    {
+      npy_input_file_path = prm.get("Numpy input file path");
+      output_file_prefix = prm.get("Output file prefix");
+      // data_out.parse_parameters(prm);
+    }
+    prm.leave_subsection();
+
+    prm.enter_subsection("Mesh and geometry parameters");
+    {
+      n_refinements = prm.get_integer("Number of refinements");
+    }
+    prm.leave_subsection();
+
+    prm.enter_subsection("Finite element parameters");
+    {
+      degree_p = prm.get_integer("Pressure polynomial degree");
+      degree_u = 1 + degree_p;
+    }
+    prm.leave_subsection();
+  }
 
   // ------ read input file ------------------------------
   template <int dim>
   void
-  Darcy<dim>::read_input_npy(const std::string &filename)
+  Darcy<dim>::read_input_npy(const std::string &file_path)
   {
     dealii::TimerOutput::Scope timer_section(computing_timer, "   Read Inputs");
 
@@ -104,10 +125,10 @@ namespace darcy
 
     // read in the permeability field
     std::vector<double> x_std_vec;
-    npy::LoadArrayFromNumpy(filename, shape, fortran_order, x_std_vec);
+    npy::LoadArrayFromNumpy(file_path, shape, fortran_order, x_std_vec);
 
     unsigned int n_dofs_rf = rf_dof_handler.n_dofs();
-    pcout << "Read in random field from file: " << filename << std::endl;
+    pcout << "Read in random field from file: " << file_path << std::endl;
     pcout << "Number of random field dofs: " << x_vec.size() << std::endl;
     pcout << "Number of input field dofs: " << x_std_vec.size() << std::endl;
     for (unsigned int i = 0; i < n_dofs_rf; ++i)
@@ -161,7 +182,7 @@ namespace darcy
     const dealii::QGauss<dim> quadrature_formula(degree_p + 1);
 
     // start the cell loop
-    dealii::FEValues<dim> fe_values(fe,
+    dealii::FEValues<dim> fe_values(*fe,
                                     quadrature_formula,
                                     dealii::update_JxW_values |
                                       dealii::update_values |
@@ -171,7 +192,7 @@ namespace darcy
                                        quadrature_formula,
                                        dealii::update_values |
                                          dealii::update_quadrature_points);
-    const unsigned int    dofs_per_cell = fe.n_dofs_per_cell();
+    const unsigned int    dofs_per_cell = fe->n_dofs_per_cell();
     const unsigned int    n_q_points    = fe_values.n_quadrature_points;
     std::vector<dealii::types::global_dof_index> local_dof_indices(
       dofs_per_cell);
@@ -265,7 +286,7 @@ namespace darcy
 
     const dealii::QGauss<dim>     quadrature_formula(degree_u + 1);
     const dealii::QGauss<dim - 1> face_quadrature_formula(degree_u + 1);
-    dealii::FEValues<dim>         fe_values(fe,
+    dealii::FEValues<dim>         fe_values(*fe,
                                     quadrature_formula,
                                     dealii::update_values |
                                       dealii::update_quadrature_points |
@@ -276,11 +297,11 @@ namespace darcy
                                        dealii::update_values |
                                          dealii::update_quadrature_points);
     dealii::FEFaceValues<dim>     fe_face_values(
-      fe,
+      *fe,
       face_quadrature_formula,
       dealii::update_values | dealii::update_normal_vectors |
         dealii::update_quadrature_points | dealii::update_JxW_values);
-    const unsigned int dofs_per_cell   = fe.n_dofs_per_cell();
+    const unsigned int dofs_per_cell   = fe->n_dofs_per_cell();
     const unsigned int n_q_points      = fe_values.n_quadrature_points;
     const unsigned int n_face_q_points = fe_face_values.n_quadrature_points;
     std::vector<dealii::Tensor<1, dim>>          phi_u(dofs_per_cell);
@@ -496,8 +517,13 @@ namespace darcy
 
     // generate grid and distribute dofs
     dealii::GridGenerator::hyper_cube(triangulation, 0, 1);
-    triangulation.refine_global(5); // 6 for HF, 5 for LF
-    dof_handler.distribute_dofs(fe);
+    triangulation.refine_global(n_refinements); // 6 for HF, 5 for LF
+
+    fe = std::make_unique<dealii::FESystem<dim>>(dealii::FE_Q<dim>(degree_u),
+                                                 dim,
+                                                 dealii::FE_Q<dim>(degree_p),
+                                                 1);
+    dof_handler.distribute_dofs(*fe);
 
     // generate grid and distribute dofs for random field
     rf_dof_handler.distribute_dofs(rf_fe_system);
@@ -565,7 +591,7 @@ namespace darcy
         dof_handler, preconditioner_constraints);
 
       dealii::DoFTools::make_zero_boundary_constraints(
-        dof_handler, preconditioner_constraints, fe.component_mask(pressure));
+        dof_handler, preconditioner_constraints, fe->component_mask(pressure));
       preconditioner_constraints.close();
     }
 
@@ -669,7 +695,7 @@ namespace darcy
 
   template <int dim>
   void
-  Darcy<dim>::write_data_to_npy(const std::string   &filename,
+  Darcy<dim>::write_data_to_npy(const std::string   &file_path,
                                 std::vector<double> &data,
                                 const unsigned int   rows,
                                 const unsigned int   columns) const
@@ -677,7 +703,7 @@ namespace darcy
     const std::vector<long unsigned> shape{rows, columns};
     const bool                       fortran_order{false};
     npy::SaveArrayAsNumpy(
-      filename, fortran_order, shape.size(), shape.data(), data);
+      file_path, fortran_order, shape.size(), shape.data(), data);
   }
 
 } // end of namespace darcy

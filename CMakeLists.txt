@@ -16,7 +16,7 @@ DEAL_II_INITIALIZE_CACHED_VARIABLES()
 PROJECT("Darcy Problem")
 
 function(setup_executable target)
-  add_executable(${target} ${target}.cc)
+  add_executable(${target} ${target}.cc parameter_reader.cpp)
   target_include_directories(${target} PRIVATE .)
   target_include_directories(${target} PRIVATE external)
   deal_ii_setup_target(${target})
