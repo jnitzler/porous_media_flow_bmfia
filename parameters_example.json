@@ -4,7 +4,7 @@
     "Output file prefix": "output_dir/output_prefix"
   },
   "Mesh and geometry parameters": {
-    "Number of refinements": 1
+    "Number of refinements": 5
   },
   "Finite element parameters": {
     "Pressure polynomial degree": 1
