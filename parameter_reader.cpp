@@ -47,7 +47,7 @@ ParameterReader::declare_parameters()
 
   prm.declare_entry("Model choice",
                     "HF",
-                    dealii::Patterns::Anything(),
+                    dealii::Patterns::Selection("HF|LFb|LFm"),
                     "Model choice for BCs: HF, LFb, or LFm");
 }
 
