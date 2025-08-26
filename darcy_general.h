@@ -184,10 +184,6 @@ namespace darcy
       {
         throw dealii::ExcMessage("Unknown pressure boundary model.");
       }
-
-    // @jnitzler not sure what these are
-    // return 1 - p[0] * p[0] + (0.25 * std::sin(p[1])); // HF pressure BC
-    // return p[1] * p[1] + 1; // LF pressure BC lung example
   }
 
   // ------------- assemble approx Schur complement --------------
