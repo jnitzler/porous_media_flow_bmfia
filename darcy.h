@@ -82,6 +82,7 @@ namespace darcy
     unsigned int n_refinements;
     std::string  npy_input_file_path;
     std::string  output_file_prefix;
+    std::string  bc_model;
 
     dealii::ParameterHandler &prm;
 

@@ -8,5 +8,6 @@
   },
   "Finite element parameters": {
     "Pressure polynomial degree": 1
-  }
+  },
+  "Model choice": "LFb"
 }

@@ -32,6 +32,7 @@
 #include <deal.II/lac/trilinos_sparsity_pattern.h>
 #include <deal.II/lac/vector_operation.h>
 #include <deal.II/numerics/vector_tools.h>
+#include <utility>
 
 #include "darcy.h"
 #include "npy.hpp"
@@ -94,7 +95,7 @@ namespace darcy
     prm.enter_subsection("File input and output");
     {
       npy_input_file_path = prm.get("Numpy input file path");
-      output_file_prefix = prm.get("Output file prefix");
+      output_file_prefix  = prm.get("Output file prefix");
       // data_out.parse_parameters(prm);
     }
     prm.leave_subsection();
@@ -111,6 +112,8 @@ namespace darcy
       degree_u = 1 + degree_p;
     }
     prm.leave_subsection();
+
+    bc_model = prm.get("Model choice");
   }
 
   // ------ read input file ------------------------------
@@ -147,13 +150,16 @@ namespace darcy
   class PressureBoundaryValues : public dealii::Function<dim>
   {
   public:
-    PressureBoundaryValues()
+    PressureBoundaryValues(std::string model)
       : dealii::Function<dim>(1)
+      , model(std::move(model))
     {}
 
     double
     value(const dealii::Point<dim> &p,
           const unsigned int        component = 0) const override;
+
+    std::string model;
   };
 
   template <int dim>
@@ -161,13 +167,23 @@ namespace darcy
   PressureBoundaryValues<dim>::value(const dealii::Point<dim> &p,
                                      const unsigned int /*component*/) const
   {
-    return 1 - p[0] * p[0] + (p[1] - 0.5) * (p[1] - 0.5); // HF model
-    // return 1 - 0.75*p[0]; // LF pressure BC for bad model
-    // return 1 - p[0] + std::abs(p[1] - 0.5);  // LF pressure for moderate
-    // model
-
-    // return 1 - p[0] * p[0] + (0.25 * std::sin(p[1])); // HF pressure BC
-    // return p[1] * p[1] + 1; // LF pressure BC lung example
+    if (model == "HF")
+      {
+        return 1 - p[0] * p[0] + (p[1] - 0.5) * (p[1] - 0.5); // HF model
+      }
+    else if (model == "LFb")
+      {
+        return 1 - 0.75 * p[0]; // LF pressure BC for bad model
+      }
+    else if (model == "LFm")
+      {
+        return 1 - p[0] +
+               std::abs(p[1] - 0.5); // LF pressure for moderate model
+      }
+    else
+      {
+        throw dealii::ExcMessage("Unknown pressure boundary model.");
+      }
   }
 
   // ------------- assemble approx Schur complement --------------
@@ -216,6 +232,7 @@ namespace darcy
             cell->get_dof_indices(local_dof_indices);
 
             // TODO! check if unused is correct
+            // @jnitzler can you check this again please?
             const dealii::FEValuesExtractors::Vector velocities(0);
             const dealii::FEValuesExtractors::Scalar pressure(dim);
 
@@ -312,6 +329,7 @@ namespace darcy
     dealii::FullMatrix<double> local_matrix(dofs_per_cell, dofs_per_cell);
     dealii::Vector<double>     local_rhs(dofs_per_cell);
     // TODO! check if unused is correct
+    // @jnitzler can you check this again please?
     double JxW_q;
 
     // start the cell loop
@@ -335,7 +353,8 @@ namespace darcy
             local_rhs    = 0;
 
             std::vector<double>               boundary_values(n_face_q_points);
-            const PressureBoundaryValues<dim> pressure_boundary_values;
+            const PressureBoundaryValues<dim> pressure_boundary_values(
+              bc_model);
 
             // get rf function values and permeability tensor per cell
             // note we assume the same quadrature points for random field and
