@@ -44,6 +44,11 @@ ParameterReader::declare_parameters()
                       "Degree of the polynomial approximation for pressure");
   }
   prm.leave_subsection();
+
+  prm.declare_entry("Model choice",
+                    "HF",
+                    dealii::Patterns::Anything(),
+                    "Model choice for BCs: HF, LFb, or LFm");
 }
 
 void
